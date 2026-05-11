@@ -49,7 +49,7 @@
 ### 1. 聊天界面
 实时流式对话，支持 Markdown 渲染和代码高亮
 
-<img src="assets/chat1.png" width="700"/>
+<img src="assets/index.png" width="700"/>
 
 ### 2. Agent 工具调用
 展示 Agent 调用 RAG 检索、外部工具的推理过程
