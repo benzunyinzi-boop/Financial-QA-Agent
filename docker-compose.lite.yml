@@ -1,0 +1,82 @@
+# docker-compose.lite.yml - 2核2G ECS 优化版
+# 特点：
+#   - 使用 Dockerfile.lite（不在容器里构建前端）
+#   - 添加资源限制，避免 OOM
+#   - 单 worker 运行，降低内存占用
+#   - 日志大小限制，避免磁盘占满
+
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.lite
+    container_name: robot-vacuum-agent
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # 降低 Python 内存占用
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./logs:/app/logs
+      - ./data:/app/data:ro
+    networks:
+      - app-net
+    # 资源限制（2核2G 适配）
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1400M
+        reservations:
+          cpus: '0.5'
+          memory: 800M
+    # 日志轮转，避免磁盘占满
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  nginx:
+    image: nginx:alpine
+    container_name: robot-vacuum-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx-docker.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      # SSL 证书（配置 HTTPS 后取消注释）
+      # - /etc/letsencrypt:/etc/nginx/ssl:ro
+    depends_on:
+      - app
+    networks:
+      - app-net
+    # Nginx 很轻量
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  app-net:
+    driver: bridge
