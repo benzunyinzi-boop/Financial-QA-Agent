@@ -4,8 +4,8 @@
 
 set -e
 
-PROJECT_DIR="/opt/langchain-react-agent"
-REPO_URL="https://github.com/YOUR_USERNAME/LangChain-ReAct-Agent.git"  # 替换为你的仓库地址
+PROJECT_DIR="/opt/robot-vacuum-customer-agent"
+REPO_URL="https://github.com/benzunyinzi-boop/robot-vacuum-customer-agent.git"
 BRANCH="main"
 
 echo "=== 1. 克隆/更新代码 ==="

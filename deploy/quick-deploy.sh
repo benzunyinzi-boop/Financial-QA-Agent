@@ -23,8 +23,8 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # 配置变量
-PROJECT_DIR="/opt/langchain-react-agent"
-REPO_URL="https://github.com/YOUR_USERNAME/LangChain-ReAct-Agent.git"  # 替换为你的仓库地址
+PROJECT_DIR="/opt/robot-vacuum-customer-agent"
+REPO_URL="https://github.com/benzunyinzi-boop/robot-vacuum-customer-agent.git"
 
 echo -e "${GREEN}步骤 1/7: 检查系统环境${NC}"
 # 检测操作系统
