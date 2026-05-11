@@ -2,40 +2,43 @@
 # AI RAG 智能体项目 依赖清单
 # 克隆项目后执行：pip install -r requirements.txt
 # ==============================================
+#
+# 版本策略：使用宽松范围约束，让 pip 自动解析兼容版本组合
+# 原因：langchain 生态版本耦合严重，硬编码版本容易冲突
 
-# 核心大模型框架
-langchain==0.3.7                  # LLM 应用开发核心框架
-langchain-core>=0.3.78,<0.4.0     # LangChain 核心组件（langchain-openai 要求 >=0.3.78）
-langchain-community==0.3.7        # 社区集成组件（各类模型/工具）
-langchain-openai==0.3.35          # OpenAI 兼容接口（用于 DashScope OpenAI-compatible endpoint）
+# 核心大模型框架（保持最新主版本兼容）
+langchain>=0.3.27,<0.4.0
+langchain-core>=0.3.78,<0.4.0
+langchain-community>=0.3.27,<0.4.0
+langchain-openai>=0.3.0,<0.4.0
 
 # 向量数据库与文档处理
-langchain-chroma==0.1.4           # Chroma 向量库集成
-chromadb==0.5.15                  # 轻量级向量数据库
-langchain-text-splitters==0.3.2   # 文本分块工具
+langchain-chroma>=0.1.4,<0.2.0
+chromadb>=0.5.15,<0.7.0
+langchain-text-splitters>=0.3.0,<0.4.0
 
 # 智能体工作流（LangGraph + 持久化 checkpointer）
-langgraph==0.2.50                 # 构建 Agent 工作流/多智能体
-langgraph-checkpoint==2.1.2       # Checkpoint 基础设施
-langgraph-checkpoint-sqlite==2.0.11  # SQLite checkpointer（对话记忆持久化）
-aiosqlite==0.22.1                 # 异步 SQLite 驱动
+langgraph>=0.2.50,<0.3.0
+langgraph-checkpoint>=2.0.0,<3.0.0
+langgraph-checkpoint-sqlite>=2.0.0,<3.0.0
+aiosqlite>=0.20.0
 
 # Web 后端框架
-fastapi==0.128.8                  # 现代异步 Web 框架
-uvicorn==0.39.0                   # ASGI 服务器
-python-multipart==0.0.20          # FastAPI 文件上传依赖
-aiofiles==25.1.0                  # 异步文件 I/O
-sqlalchemy==2.0.35                # ORM（用于知识库元数据）
+fastapi>=0.115.0,<1.0.0
+uvicorn>=0.30.0,<1.0.0
+python-multipart>=0.0.20
+aiofiles>=24.0.0
+sqlalchemy>=2.0.30,<3.0.0
 
 # 配置和工具
-python-dotenv==1.2.1              # .env 文件加载
-pyyaml==6.0.2                     # YAML 配置文件解析
+python-dotenv>=1.0.0
+pyyaml>=6.0
 
 # 文件解析
-pypdf==5.1.0                      # PDF 文档读取解析
+pypdf>=5.0.0
 
 # 模型服务（阿里通义千问/ dashscope）
-dashscope==1.20.14                # 阿里模型调用 SDK
+dashscope>=1.20.0
 
-# 旧版前端（可选，逐步迁移到 React）
-streamlit==1.40.1                 # 旧的 Streamlit 演示界面（可保留）
+# 旧版前端（可选保留）
+streamlit>=1.40.0
