@@ -25,7 +25,7 @@ services:
     volumes:
       - ./chroma_db:/app/chroma_db
       - ./logs:/app/logs
-      - ./data:/app/data:ro
+      - ./data:/app/data
     networks:
       - app-net
     # 资源限制（2核2G 适配）
