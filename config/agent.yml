@@ -1,1 +1,12 @@
-external_data_path: data/external/records.csv
+# Configuration for different environments
+# Development environment
+development:
+  external_data_path: data/external/records.csv
+
+# Testing environment
+testing:
+  external_data_path: data/external/test_records.csv
+
+# Production environment
+production:
+  external_data_path: /var/app/data/external/records.csv

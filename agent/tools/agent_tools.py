@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from utils.logger_handler import logger
 from langchain_core.tools import tool
 
@@ -10,35 +11,42 @@ from utils.path_tool import get_abs_path
 rag = RagSummarizeService()
 
 user_ids = ["1001", "1002", "1003", "1004", "1005", "1006", "1007", "1008", "1009", "1010",]
-month_arr = ["2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06",
-             "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12", ]
 
 external_data = {}
 
 
-@tool(description="从向量存储中检索参考资料")
+@tool
 def rag_summarize(query: str) -> str:
-    return rag.rag_summarize(query)
+    """从向量存储中检索参考资料"""
+    try:
+        return rag.rag_summarize(query)
+    except Exception as e:
+        logger.error(f"[rag_summarize]检索或总结失败：{str(e)}", exc_info=True)
+        return "当前知识检索服务暂不可用（可能是网络或模型服务异常），请稍后重试。"
 
 
-@tool(description="获取指定城市的天气，以消息字符串的形式返回")
+@tool
 def get_weather(city: str) -> str:
+    """获取指定城市的天气，以消息字符串的形式返回"""
     return f"城市{city}天气为晴天，气温26摄氏度，空气湿度50%，南风1级，AQI21，最近6小时降雨概率极低"
 
 
-@tool(description="获取用户所在城市的名称，以纯字符串形式返回")
-def get_user_location() -> str:
+@tool
+def get_user_location(dummy: str) -> str:
+    """获取用户所在城市的名称，以纯字符串形式返回。入参可为任意占位字符串。"""
     return random.choice(["深圳", "合肥", "杭州"])
 
 
-@tool(description="获取用户的ID，以纯字符串形式返回")
-def get_user_id() -> str:
+@tool
+def get_user_id(dummy: str) -> str:
+    """获取用户的ID，以纯字符串形式返回。入参可为任意占位字符串。"""
     return random.choice(user_ids)
 
 
-@tool(description="获取当前月份，以纯字符串形式返回")
-def get_current_month() -> str:
-    return random.choice(month_arr)
+@tool
+def get_current_month(dummy: str) -> str:
+    """获取当前月份，返回 YYYY-MM 格式字符串。入参可为任意占位字符串。"""
+    return datetime.now().strftime("%Y-%m")
 
 
 def generate_external_data():
@@ -94,9 +102,15 @@ def generate_external_data():
                 }
 
 
-@tool(description="从外部系统中获取指定用户在指定月份的使用记录，以纯字符串形式返回， 如果未检索到返回空字符串")
-def fetch_external_data(user_id: str, month: str) -> str:
+@tool
+def fetch_external_data(input_text: str) -> str:
+    """从外部系统中获取指定用户在指定月份的使用记录。入参格式：user_id,month，例如：1001,2025-01"""
     generate_external_data()
+    arr = input_text.split(",", 1)
+    if len(arr) != 2:
+        return "参数格式错误，请使用：user_id,month，例如：1001,2025-01"
+    user_id = arr[0].strip()
+    month = arr[1].strip()
 
     try:
         return external_data[user_id][month]
@@ -106,6 +120,7 @@ def fetch_external_data(user_id: str, month: str) -> str:
 #if __name__ =='__main__':
 #    print=(fetch_external_data("1001","2025-01"))
 
-@tool(description="无入参，无返回值，调用后触发中间件自动为报告生成的场景动态注入上下文信息，为后续提示词切换提供上下文信息")
-def fill_context_for_report():
+@tool
+def fill_context_for_report(dummy: str):
+    """调用后触发报告生成场景（兼容单入参工具协议，入参可为任意占位字符串）。"""
     return "fill_context_for_report已调用"

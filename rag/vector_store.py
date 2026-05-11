@@ -1,6 +1,7 @@
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from utils.config_handler import chroma_conf
+from chromadb.config import Settings
 
 from model.factory import embed_model
 
@@ -10,15 +11,12 @@ from utils.file_handler import pdf_loader, txt_loader, listdir_with_allowed_type
 from utils.logger_handler import logger
 
 import os
+import shutil
 
 
 class VectorStoreService:
     def __init__(self):
-        self.vector_store = Chroma(
-            collection_name=chroma_conf["collection_name"],
-            embedding_function=embed_model,
-            persist_directory=chroma_conf["persist_directory"],
-        )
+        self.vector_store = self._create_vector_store()
 
         self.spliter = RecursiveCharacterTextSplitter(
             chunk_size=chroma_conf["chunk_size"],
@@ -27,8 +25,108 @@ class VectorStoreService:
             length_function=len,
         )
 
+        self._ensure_vector_store_ready()
+
+    def _create_vector_store(self) -> Chroma:
+        persist_dir = get_abs_path(chroma_conf["persist_directory"])
+        return Chroma(
+            collection_name=chroma_conf["collection_name"],
+            embedding_function=embed_model,
+            persist_directory=persist_dir,
+            client_settings=Settings(anonymized_telemetry=False),
+        )
+
+    def _reset_vector_store(self):
+        persist_dir = get_abs_path(chroma_conf["persist_directory"])
+        if os.path.exists(persist_dir):
+            shutil.rmtree(persist_dir, ignore_errors=True)
+        self.vector_store = self._create_vector_store()
+
+    def _ensure_vector_store_ready(self):
+        """
+        检查向量库是否可用：
+        1) 若本地sqlite结构损坏（典型报错：no such table: collections），自动重建。
+        2) 若集合为空，自动执行一次知识库加载。
+        """
+        try:
+            count = self.vector_store._collection.count()
+        except Exception as e:
+            if "no such table: collections" in str(e):
+                logger.warning("[向量库]检测到损坏的chroma库结构，自动重建并重新加载知识库")
+                self._reset_vector_store()
+                self.load_document()
+                return
+            raise e
+
+        if count == 0:
+            logger.info("[向量库]集合为空，开始首次加载知识库")
+            self.load_document()
+
     def get_retriever(self):
         return self.vector_store.as_retriever(search_kwargs={"k": chroma_conf["k"]})
+
+    def load_single_document(self, file_path: str, document_id: str) -> int:
+        """
+        加载单个文档到向量库
+        :param file_path: 文件路径
+        :param document_id: 文档 ID（用于后续删除）
+        :return: 分块数量
+        """
+        def get_file_documents(read_path: str):
+            if read_path.endswith("txt"):
+                return txt_loader(read_path)
+            if read_path.endswith("pdf"):
+                return pdf_loader(read_path)
+            return []
+
+        try:
+            documents: list[Document] = get_file_documents(file_path)
+
+            if not documents:
+                logger.warning(f"[加载知识库]{file_path}内没有有效文本内容")
+                return 0
+
+            split_document: list[Document] = self.spliter.split_documents(documents)
+
+            if not split_document:
+                logger.warning(f"[加载知识库]{file_path}分片后没有有效文本内容")
+                return 0
+
+            # 在每个分块的 metadata 中添加 document_id
+            for i, doc in enumerate(split_document):
+                doc.metadata["document_id"] = document_id
+                doc.metadata["chunk_index"] = i
+                doc.metadata["source_file"] = os.path.basename(file_path)
+
+            # DashScope Embedding API 限制每批次最多 10 个文档
+            batch_size = 10
+            total_chunks = len(split_document)
+            for i in range(0, total_chunks, batch_size):
+                batch = split_document[i:i + batch_size]
+                self.vector_store.add_documents(batch)
+                logger.info(f"[加载知识库]已处理 {min(i + batch_size, total_chunks)}/{total_chunks} 个分块")
+
+            logger.info(f"[加载知识库]{file_path} 内容加载成功，共 {total_chunks} 个分块")
+            return total_chunks
+
+        except Exception as e:
+            logger.error(f"[加载知识库]{file_path}加载失败：{str(e)}", exc_info=True)
+            raise e
+
+    def delete_document(self, document_id: str):
+        """
+        删除指定文档的所有向量分块
+        :param document_id: 文档 ID
+        """
+        try:
+            # Chroma 通过 where 条件删除
+            self.vector_store._collection.delete(
+                where={"document_id": document_id}
+            )
+            logger.info(f"[删除知识库]文档 {document_id} 的向量已删除")
+        except Exception as e:
+            logger.error(f"[删除知识库]删除文档 {document_id} 失败：{str(e)}", exc_info=True)
+            raise e
 
     def load_document(self):
         """
@@ -90,8 +188,10 @@ class VectorStoreService:
                     logger.warning(f"[加载知识库]{path}分片后没有有效文本内容，跳过")
                     continue
 
-                # 将内容存入向量库
-                self.vector_store.add_documents(split_document)
+                # 将内容存入向量库（DashScope Embedding API 限制每批次最多 10 个）
+                batch_size = 10
+                for i in range(0, len(split_document), batch_size):
+                    self.vector_store.add_documents(split_document[i:i + batch_size])
 
                 # 记录这个已经处理好的文件的md5，避免下次重复加载
                 save_md5_hex(md5_hex)
@@ -114,5 +214,3 @@ if __name__ == '__main__':
     for r in res:
         print(r.page_content)
         print("-"*20)
-
-

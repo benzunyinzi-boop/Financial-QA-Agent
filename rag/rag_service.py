@@ -9,6 +9,7 @@ from rag.vector_store import VectorStoreService
 from utils.prompt_loader import load_rag_prompts
 from langchain_core.prompts import PromptTemplate
 from model.factory import chat_model
+from utils.logger_handler import logger
 
 
 def print_prompt(prompt):
@@ -32,7 +33,15 @@ class RagSummarizeService(object):
         return chain
 
     def retriever_docs(self, query: str) -> list[Document]:
-        return self.retriever.invoke(query)
+        try:
+            return self.retriever.invoke(query)
+        except Exception as e:
+            if "no such table: collections" in str(e):
+                logger.warning("[RAG检索]检测到chroma库异常，自动重建后重试一次")
+                self.vector_store = VectorStoreService()
+                self.retriever = self.vector_store.get_retriever()
+                return self.retriever.invoke(query)
+            raise e
 
     def rag_summarize(self, query: str) -> str:
 

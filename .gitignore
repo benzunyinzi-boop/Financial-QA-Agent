@@ -40,11 +40,34 @@ logs/
 # Runtime generated data
 # =========================
 chroma_db/
+agent_memory.db
+knowledge.db
+*.db-journal
+md5.txt
+
+# User uploads
+data/uploads/
+frontend/data/
+frontend/knowledge.db
 
 # Optional: if you later generate temp reports locally
 tmp/
 temp/
 *.tmp
+
+# =========================
+# Frontend build artifacts
+# =========================
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.local
+
+# =========================
+# Personal / local-only files
+# =========================
+面试准备.pdf
+*.personal.*
 
 # =========================
 # Streamlit
