@@ -1,13 +1,18 @@
-# Dockerfile - 2核2G 优化版
-# 策略：跳过前端构建阶段，直接复制已构建好的 dist/ 目录
-# 优势：镜像更小、构建更快、不占用服务器内存
+# Dockerfile - 2核2G 优化版（国内镜像加速）
+# 策略：
+#   1. 跳过前端构建阶段，直接复制已构建好的 dist/ 目录
+#   2. 使用阿里云 Debian 镜像源加速 apt
+#   3. 使用清华 PyPI 镜像源加速 pip
 #
 # 使用前提：
 #   1. 在本地执行 ./deploy/build-frontend.sh 构建前端
-#   2. 或者在本地执行 cd frontend && npm run build
-#   3. 然后在 ECS 上使用 Dockerfile.lite 构建镜像
+#   2. 然后在 ECS 上使用 Dockerfile.lite 构建镜像
 
 FROM python:3.9-slim
+
+# 配置阿里云 Debian 镜像源（大幅加速 apt 下载）
+RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list 2>/dev/null || true
 
 # 安装系统依赖（最小化）
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -15,6 +20,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
+# 配置清华 PyPI 镜像源
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
 
 WORKDIR /app
 
