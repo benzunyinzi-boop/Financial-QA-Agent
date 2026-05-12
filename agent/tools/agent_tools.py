@@ -112,11 +112,31 @@ def fetch_external_data(input_text: str) -> str:
     user_id = arr[0].strip()
     month = arr[1].strip()
 
-    try:
-        return external_data[user_id][month]
-    except KeyError:
-        logger.warning(f"[fetch_external_data]未能检索到用户：{user_id}在{month}的使用记录数据")
-        return ""
+    # 用户 ID 不存在：如实返回，不能用别人的数据冒充
+    if user_id not in external_data:
+        logger.warning(f"[fetch_external_data]用户 {user_id} 在外部系统中不存在")
+        return f"未找到用户 {user_id} 的任何使用记录，该用户可能尚未激活设备或未关联账户"
+
+    user_records = external_data[user_id]
+
+    # 指定月份无数据时，降级为该用户最近一个可用月份的数据
+    # 注意：只在"同一用户"内降级，不跨用户
+    if month not in user_records:
+        if not user_records:
+            return f"用户 {user_id} 无任何月份的使用记录"
+        available_months = sorted(user_records.keys(), reverse=True)
+        fallback_month = available_months[0]
+        logger.warning(f"[fetch_external_data]用户 {user_id} 在 {month} 无数据，降级使用最近月份 {fallback_month}")
+        month = fallback_month
+
+    record = user_records[month]
+    return (
+        f"用户 {user_id} 在 {month} 的使用记录：\n"
+        f"- 特征：{record['特征']}\n"
+        f"- 清洁效率：{record['效率']}\n"
+        f"- 耗材状态：{record['耗材']}\n"
+        f"- 对比分析：{record['对比']}"
+    )
 #if __name__ =='__main__':
 #    print=(fetch_external_data("1001","2025-01"))
 
