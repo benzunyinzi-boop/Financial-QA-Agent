@@ -17,12 +17,13 @@ export interface StreamChunk {
 export async function* streamChat(
   conversationId: string,
   message: string,
+  role: 'customer' | 'agent' = 'customer',
   signal?: AbortSignal
 ): AsyncGenerator<StreamChunk> {
   const response = await fetch(`${API_BASE}/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversation_id: conversationId, message }),
+    body: JSON.stringify({ conversation_id: conversationId, message, role }),
     signal,
   })
 

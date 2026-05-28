@@ -1,11 +1,20 @@
 collection_name : agent
 persist_directory : chroma_db
-k :  3
-data_path : data
+k : 4
+data_path : data/insurance
 md5_hex_store : md5.txt
-allow_knowledge_file_type : ["txt","pdf"]
+allow_knowledge_file_type : ["txt","pdf","md"]
 
-chunk_size : 200
-chunk_overlap : 20
-separators : ["\n\n","。",".","?","？","!"," ",""]
+chunk_size : 600
+chunk_overlap : 80
+separators : ["\n\n","\n","。",".","?","？","!"," ",""]
 
+knowledge_bases:
+  public_kb:
+    collection_name: insurance_public
+    sub_dir: public
+    description: "公开知识库：产品条款、FAQ、投保/理赔流程"
+  internal_kb:
+    collection_name: insurance_internal
+    sub_dir: internal
+    description: "内部知识库：客服SOP、话术、合规要点"

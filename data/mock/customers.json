@@ -1,0 +1,47 @@
+{
+  "_comment": "客户档案 mock 数据。C001 是当前演示用户。",
+  "customers": [
+    {
+      "customer_id": "C001",
+      "name": "张三",
+      "gender": "男",
+      "age": 32,
+      "phone_masked": "138****8888",
+      "id_card_masked": "330***********1234",
+      "risk_level": "低",
+      "policy_count": 2,
+      "claim_count": 1,
+      "complaint_count": 0,
+      "vip_level": "普通",
+      "remark": "标准客户，无投诉历史"
+    },
+    {
+      "customer_id": "C002",
+      "name": "李四",
+      "gender": "女",
+      "age": 45,
+      "phone_masked": "139****6666",
+      "id_card_masked": "320***********5678",
+      "risk_level": "中",
+      "policy_count": 3,
+      "claim_count": 2,
+      "complaint_count": 1,
+      "vip_level": "白银",
+      "remark": "曾因理赔时效投诉一次，已妥善处理"
+    },
+    {
+      "customer_id": "C003",
+      "name": "王五",
+      "gender": "男",
+      "age": 58,
+      "phone_masked": "137****2222",
+      "id_card_masked": "110***********9999",
+      "risk_level": "高",
+      "policy_count": 1,
+      "claim_count": 0,
+      "complaint_count": 0,
+      "vip_level": "黄金",
+      "remark": "高净值客户，近期咨询保额加保"
+    }
+  ]
+}

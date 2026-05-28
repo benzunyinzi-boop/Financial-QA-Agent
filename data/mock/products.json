@@ -1,0 +1,45 @@
+{
+  "_comment": "保险产品 mock 数据，仅用于演示。当前用户 C001 持有 P20240001 和 P20240002。",
+  "products": [
+    {
+      "product_code": "CI-DEMO-001",
+      "product_name": "安心保 重大疾病保险（标准版）",
+      "category": "重疾险",
+      "description": "保障 120 种重疾 / 25 种中症 / 50 种轻症，可选 30 年/70 岁/终身保障期",
+      "min_age": 0,
+      "max_age": 60,
+      "waiting_period_days": 180,
+      "annual_premium_example": "30 岁男 50 万保额 30 年缴：约 5800 元/年"
+    },
+    {
+      "product_code": "CI-DEMO-002",
+      "product_name": "安心保 重大疾病保险 Pro",
+      "category": "重疾险",
+      "description": "保障 130 种重疾，重疾不分组多次赔付（最多 3 次），等待期 90 天",
+      "min_age": 0,
+      "max_age": 55,
+      "waiting_period_days": 90,
+      "annual_premium_example": "30 岁男 50 万保额 30 年缴：约 8200 元/年"
+    },
+    {
+      "product_code": "MED-DEMO-001",
+      "product_name": "康悦无忧 百万医疗险",
+      "category": "医疗险",
+      "description": "一般医疗 300 万 / 重疾医疗 600 万，1 万年度免赔额，6 年保证续保",
+      "min_age": 0,
+      "max_age": 65,
+      "waiting_period_days": 30,
+      "annual_premium_example": "30 岁约 350 元/年"
+    },
+    {
+      "product_code": "MED-DEMO-002",
+      "product_name": "康悦无忧 百万医疗险（旗舰版）",
+      "category": "医疗险",
+      "description": "一般医疗 600 万 / 重疾医疗 1200 万 / 重疾医疗 0 免赔，20 年保证续保",
+      "min_age": 0,
+      "max_age": 60,
+      "waiting_period_days": 30,
+      "annual_premium_example": "30 岁约 980 元/年"
+    }
+  ]
+}

@@ -15,7 +15,12 @@ import shutil
 
 
 class VectorStoreService:
-    def __init__(self):
+    def __init__(self, kb_name: str = "public_kb"):
+        self.kb_name = kb_name
+        self.kb_config = self._load_kb_config(kb_name)
+        self.collection_name = self.kb_config["collection_name"]
+        self.sub_dir = self.kb_config["sub_dir"]
+
         self.vector_store = self._create_vector_store()
 
         self.spliter = RecursiveCharacterTextSplitter(
@@ -27,19 +32,34 @@ class VectorStoreService:
 
         self._ensure_vector_store_ready()
 
+    def _load_kb_config(self, kb_name: str) -> dict:
+        kbs = chroma_conf.get("knowledge_bases", {})
+        if kb_name not in kbs:
+            raise ValueError(f"未配置的知识库：{kb_name}，可用：{list(kbs.keys())}")
+        return kbs[kb_name]
+
+    def _md5_store_path(self) -> str:
+        return get_abs_path(f"md5_{self.kb_name}.txt")
+
     def _create_vector_store(self) -> Chroma:
         persist_dir = get_abs_path(chroma_conf["persist_directory"])
         return Chroma(
-            collection_name=chroma_conf["collection_name"],
+            collection_name=self.collection_name,
             embedding_function=embed_model,
             persist_directory=persist_dir,
-            client_settings=Settings(anonymized_telemetry=False),
+            client_settings=Settings(
+                anonymized_telemetry=False,
+                is_persistent=True,
+                persist_directory=persist_dir,
+            ),
         )
 
     def _reset_vector_store(self):
-        persist_dir = get_abs_path(chroma_conf["persist_directory"])
-        if os.path.exists(persist_dir):
-            shutil.rmtree(persist_dir, ignore_errors=True)
+        # 注意：Chroma 多 collection 共享同一 persist_directory，重置时仅删除当前 collection
+        try:
+            self.vector_store._client.delete_collection(self.collection_name)
+        except Exception as e:
+            logger.warning(f"[向量库]删除 collection {self.collection_name} 失败：{str(e)}")
         self.vector_store = self._create_vector_store()
 
     def _ensure_vector_store_ready(self):
@@ -73,7 +93,7 @@ class VectorStoreService:
         :return: 分块数量
         """
         def get_file_documents(read_path: str):
-            if read_path.endswith("txt"):
+            if read_path.endswith("txt") or read_path.endswith("md"):
                 return txt_loader(read_path)
             if read_path.endswith("pdf"):
                 return pdf_loader(read_path)
@@ -92,11 +112,12 @@ class VectorStoreService:
                 logger.warning(f"[加载知识库]{file_path}分片后没有有效文本内容")
                 return 0
 
-            # 在每个分块的 metadata 中添加 document_id
+            # 在每个分块的 metadata 中添加 document_id 和 kb_name
             for i, doc in enumerate(split_document):
                 doc.metadata["document_id"] = document_id
                 doc.metadata["chunk_index"] = i
                 doc.metadata["source_file"] = os.path.basename(file_path)
+                doc.metadata["kb_name"] = self.kb_name
 
             # DashScope Embedding API 限制每批次最多 10 个文档
             batch_size = 10
@@ -135,13 +156,15 @@ class VectorStoreService:
         :return: None
         """
 
+        md5_store_path = self._md5_store_path()
+
         def check_md5_hex(md5_for_check: str):
-            if not os.path.exists(get_abs_path(chroma_conf["md5_hex_store"])):
+            if not os.path.exists(md5_store_path):
                 # 创建文件
-                open(get_abs_path(chroma_conf["md5_hex_store"]), "w", encoding="utf-8").close()
+                open(md5_store_path, "w", encoding="utf-8").close()
                 return False            # md5 没处理过
 
-            with open(get_abs_path(chroma_conf["md5_hex_store"]), "r", encoding="utf-8") as f:
+            with open(md5_store_path, "r", encoding="utf-8") as f:
                 for line in f.readlines():
                     line = line.strip()
                     if line == md5_for_check:
@@ -150,11 +173,11 @@ class VectorStoreService:
                 return False            # md5 没处理过
 
         def save_md5_hex(md5_for_check: str):
-            with open(get_abs_path(chroma_conf["md5_hex_store"]), "a", encoding="utf-8") as f:
+            with open(md5_store_path, "a", encoding="utf-8") as f:
                 f.write(md5_for_check + "\n")
 
         def get_file_documents(read_path: str):
-            if read_path.endswith("txt"):
+            if read_path.endswith("txt") or read_path.endswith("md"):
                 return txt_loader(read_path)
 
             if read_path.endswith("pdf"):
@@ -162,8 +185,13 @@ class VectorStoreService:
 
             return []
 
+        kb_data_path = os.path.join(get_abs_path(chroma_conf["data_path"]), self.sub_dir)
+        if not os.path.exists(kb_data_path):
+            logger.warning(f"[加载知识库]{kb_data_path} 目录不存在，跳过 {self.kb_name} 加载")
+            return
+
         allowed_files_path: list[str] = listdir_with_allowed_type(
-            get_abs_path(chroma_conf["data_path"]),
+            kb_data_path,
             tuple(chroma_conf["allow_knowledge_file_type"]),
         )
 
@@ -204,13 +232,14 @@ class VectorStoreService:
 
 
 if __name__ == '__main__':
-    vs = VectorStoreService()
+    for kb in ["public_kb", "internal_kb"]:
+        print(f"\n==== 测试 {kb} ====")
+        vs = VectorStoreService(kb_name=kb)
+        vs.load_document()
 
-    vs.load_document()
-
-    retriever = vs.get_retriever()
-
-    res = retriever.invoke("迷路")
-    for r in res:
-        print(r.page_content)
-        print("-"*20)
+        retriever = vs.get_retriever()
+        query = "重疾险等待期" if kb == "public_kb" else "销售误导红线"
+        res = retriever.invoke(query)
+        for r in res:
+            print(r.metadata.get("source_file"), "|", r.page_content[:60])
+            print("-"*20)

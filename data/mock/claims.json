@@ -1,0 +1,47 @@
+{
+  "_comment": "理赔工单 mock 数据。归属 C001 的理赔：CL20250003。",
+  "claims": [
+    {
+      "claim_no": "CL20250003",
+      "policy_no": "P20240002",
+      "customer_id": "C001",
+      "customer_name": "张三",
+      "claim_type": "医疗险住院理赔",
+      "status": "已结案",
+      "accident_date": "2025-08-10",
+      "report_date": "2025-08-12",
+      "claim_amount": 32000,
+      "payout_amount": 22000,
+      "payout_date": "2025-08-25",
+      "remark": "因急性阑尾炎住院手术，扣除 1 万免赔额后正常报销"
+    },
+    {
+      "claim_no": "CL20250011",
+      "policy_no": "P20240006",
+      "customer_id": "C002",
+      "customer_name": "李四",
+      "claim_type": "医疗险住院理赔",
+      "status": "审核中",
+      "accident_date": "2026-04-20",
+      "report_date": "2026-04-25",
+      "claim_amount": 85000,
+      "payout_amount": null,
+      "payout_date": null,
+      "remark": "因肺炎住院，资料齐全，预计 5 个工作日内审结"
+    },
+    {
+      "claim_no": "CL20240007",
+      "policy_no": "P20240005",
+      "customer_id": "C002",
+      "customer_name": "李四",
+      "claim_type": "重疾理赔",
+      "status": "已拒赔",
+      "accident_date": "2024-08-15",
+      "report_date": "2024-08-20",
+      "claim_amount": 600000,
+      "payout_amount": 0,
+      "payout_date": null,
+      "remark": "等待期内确诊，不在保障范围。已退还保费 9800 元，合同终止。客户曾因此发起投诉，已通过 SOP 流程妥善处理"
+    }
+  ]
+}

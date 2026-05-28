@@ -1,17 +1,20 @@
 import { useCallback, useRef } from 'react'
 import { useChatStore } from '../stores/chatStore'
+import { useUIStore } from '../stores/uiStore'
 import { streamChat, mockStreamChat } from '../lib/api'
 import { generateId } from '../lib/utils'
 import type { Message } from '../types'
 
 const TOOL_LABELS: Record<string, string> = {
-  rag_summarize: '正在检索知识库...',
-  get_weather: '正在查询天气...',
-  get_user_location: '正在获取您的位置...',
-  get_user_id: '正在获取用户身份...',
-  get_current_month: '正在获取时间信息...',
-  fetch_external_data: '正在调取使用记录...',
-  fill_context_for_report: '正在准备报告上下文...',
+  search_knowledge: '正在检索知识库...',
+  get_current_date: '正在获取日期...',
+  get_my_policies: '正在查询您的保单...',
+  get_my_policy_detail: '正在查询保单详情...',
+  get_my_claim_progress: '正在查询理赔进度...',
+  query_any_policy: '正在查询保单...',
+  query_customer_profile: '正在查询客户档案...',
+  compare_products: '正在对比产品...',
+  check_compliance: '正在检查合规...',
 }
 
 export function useChat() {
@@ -24,6 +27,8 @@ export function useChat() {
     setStreaming,
     setToolStatus,
   } = useChatStore()
+
+  const { role } = useUIStore()
 
   const abortRef = useRef<AbortController | null>(null)
 
@@ -60,7 +65,7 @@ export function useChat() {
       abortRef.current = controller
 
       try {
-        for await (const chunk of streamChat(convId, content, controller.signal)) {
+        for await (const chunk of streamChat(convId, content, role, controller.signal)) {
           if (chunk.type === 'token' && chunk.content) {
             accumulated += chunk.content
             updateLastAssistantMessage(convId, accumulated)
@@ -94,7 +99,7 @@ export function useChat() {
         abortRef.current = null
       }
     },
-    [activeConversationId, isStreaming, createConversation, addMessage, updateLastAssistantMessage, setStreaming, setToolStatus]
+    [activeConversationId, isStreaming, role, createConversation, addMessage, updateLastAssistantMessage, setStreaming, setToolStatus]
   )
 
   const stopStreaming = useCallback(() => {

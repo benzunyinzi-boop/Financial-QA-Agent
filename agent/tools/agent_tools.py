@@ -1,146 +1,276 @@
+"""
+保险问答 Agent 工具集（MVP 版本）
+
+工具分组：
+- 通用工具：search_knowledge, get_current_date
+- 客户工具：get_my_policies, get_my_policy_detail, get_my_claim_progress
+- 客服工具：query_any_policy, query_customer_profile, compare_products, check_compliance
+"""
+import json
 import os
 from datetime import datetime
-from utils.logger_handler import logger
 from langchain_core.tools import tool
-
-from rag.rag_service import RagSummarizeService
-import random
-from utils.config_handler import agent_conf
+from rag.rag_router import RagRouter
 from utils.path_tool import get_abs_path
+from utils.logger_handler import logger
 
-rag = RagSummarizeService()
 
-user_ids = ["1001", "1002", "1003", "1004", "1005", "1006", "1007", "1008", "1009", "1010",]
+# ============ 通用工具（客户+客服共用）============
 
-external_data = {}
+def make_search_knowledge(role: str):
+    """闭包：绑定 role 到工具内部，避免 LLM 自己传 role 参数"""
+    @tool
+    def search_knowledge(query: str) -> str:
+        """检索保险产品、条款、流程、FAQ 等参考资料。query 为贴合问题的关键词。"""
+        try:
+            router = RagRouter()
+            return router.search(query, role=role)
+        except Exception as e:
+            logger.error(f"[search_knowledge]检索失败：{str(e)}", exc_info=True)
+            return f"检索失败：{str(e)}"
+    return search_knowledge
 
 
 @tool
-def rag_summarize(query: str) -> str:
-    """从向量存储中检索参考资料"""
+def get_current_date(dummy: str) -> str:
+    """获取今天日期，用于计算保单剩余有效期等。dummy 为占位参数。"""
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+# ============ 客户工具（仅客户端可用）============
+
+# Mock 当前登录用户
+CURRENT_USER_ID = "C001"
+
+
+def _load_mock_json(filename: str):
+    path = get_abs_path(f"data/mock/{filename}")
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@tool
+def get_my_policies(dummy: str) -> str:
+    """查询当前用户名下所有保单。dummy 为占位参数。"""
     try:
-        return rag.rag_summarize(query)
+        data = _load_mock_json("policies.json")
+        my_policies = [p for p in data.get("policies", []) if p["customer_id"] == CURRENT_USER_ID]
+
+        if not my_policies:
+            return "您当前没有保单。"
+
+        result = f"您共有 {len(my_policies)} 份保单：\n"
+        for p in my_policies:
+            result += f"- 保单号：{p['policy_no']} | 产品：{p['product_name']} | 状态：{p['status']} | 保额：{p['sum_insured']}元\n"
+        return result
     except Exception as e:
-        logger.error(f"[rag_summarize]检索或总结失败：{str(e)}", exc_info=True)
-        return "当前知识检索服务暂不可用（可能是网络或模型服务异常），请稍后重试。"
+        logger.error(f"[get_my_policies]查询失败：{str(e)}", exc_info=True)
+        return f"查询失败：{str(e)}"
 
 
 @tool
-def get_weather(city: str) -> str:
-    """获取指定城市的天气，以消息字符串的形式返回"""
-    return f"城市{city}天气为晴天，气温26摄氏度，空气湿度50%，南风1级，AQI21，最近6小时降雨概率极低"
+def get_my_policy_detail(policy_no: str) -> str:
+    """查询指定保单详情（必须是当前用户名下的）。"""
+    try:
+        data = _load_mock_json("policies.json")
+        policy = next((p for p in data.get("policies", []) if p["policy_no"] == policy_no), None)
+
+        if not policy:
+            return f"未找到保单号 {policy_no}。"
+
+        if policy["customer_id"] != CURRENT_USER_ID:
+            return "出于隐私保护，您只能查询本人名下的保单。"
+
+        result = f"""
+保单号：{policy['policy_no']}
+产品名称：{policy['product_name']}
+状态：{policy['status']}
+生效日期：{policy['start_date']}
+到期日期：{policy['end_date']}
+保障期限：{policy['term']}
+缴费期间：{policy['payment_period']}
+年缴保费：{policy['premium']}元
+保额：{policy['sum_insured']}元
+受益人：{policy['beneficiary']}
+下次缴费日：{policy['next_payment_date']}
+"""
+        return result.strip()
+    except Exception as e:
+        logger.error(f"[get_my_policy_detail]查询失败：{str(e)}", exc_info=True)
+        return f"查询失败：{str(e)}"
 
 
 @tool
-def get_user_location(dummy: str) -> str:
-    """获取用户所在城市的名称，以纯字符串形式返回。入参可为任意占位字符串。"""
-    return random.choice(["深圳", "合肥", "杭州"])
+def get_my_claim_progress(claim_no: str) -> str:
+    """查询当前用户的理赔进度。"""
+    try:
+        data = _load_mock_json("claims.json")
+        claim = next((c for c in data.get("claims", []) if c["claim_no"] == claim_no), None)
+
+        if not claim:
+            return f"未找到理赔工单 {claim_no}。"
+
+        if claim["customer_id"] != CURRENT_USER_ID:
+            return "出于隐私保护，您只能查询本人的理赔记录。"
+
+        result = f"""
+理赔工单号：{claim['claim_no']}
+关联保单：{claim['policy_no']}
+理赔类型：{claim['claim_type']}
+状态：{claim['status']}
+出险日期：{claim['accident_date']}
+报案日期：{claim['report_date']}
+申请金额：{claim['claim_amount']}元
+"""
+        if claim['payout_amount'] is not None:
+            result += f"赔付金额：{claim['payout_amount']}元\n"
+        if claim['payout_date']:
+            result += f"赔付日期：{claim['payout_date']}\n"
+        result += f"备注：{claim['remark']}"
+
+        return result.strip()
+    except Exception as e:
+        logger.error(f"[get_my_claim_progress]查询失败：{str(e)}", exc_info=True)
+        return f"查询失败：{str(e)}"
+
+
+# ============ 客服工具（仅客服端可用）============
+
+@tool
+def query_any_policy(policy_no: str) -> str:
+    """查询任意保单（无归属限制，留审计）。客服专用。"""
+    try:
+        data = _load_mock_json("policies.json")
+        policy = next((p for p in data.get("policies", []) if p["policy_no"] == policy_no), None)
+
+        if not policy:
+            return f"未找到保单号 {policy_no}。"
+
+        result = f"""
+保单号：{policy['policy_no']}
+客户姓名：{policy['customer_name']}（ID: {policy['customer_id']}）
+产品名称：{policy['product_name']}
+状态：{policy['status']}
+生效日期：{policy['start_date']}
+到期日期：{policy['end_date']}
+保障期限：{policy['term']}
+缴费期间：{policy['payment_period']}
+年缴保费：{policy['premium']}元
+保额：{policy['sum_insured']}元
+受益人：{policy['beneficiary']}
+下次缴费日：{policy['next_payment_date']}
+"""
+        return result.strip()
+    except Exception as e:
+        logger.error(f"[query_any_policy]查询失败：{str(e)}", exc_info=True)
+        return f"查询失败：{str(e)}"
 
 
 @tool
-def get_user_id(dummy: str) -> str:
-    """获取用户的ID，以纯字符串形式返回。入参可为任意占位字符串。"""
-    return random.choice(user_ids)
+def query_customer_profile(customer_id: str) -> str:
+    """查询客户画像（保单数、理赔次数、投诉记录、风险等级）。客服专用。"""
+    try:
+        data = _load_mock_json("customers.json")
+        customer = next((c for c in data.get("customers", []) if c["customer_id"] == customer_id), None)
+
+        if not customer:
+            return f"未找到客户 {customer_id}。"
+
+        result = f"""
+客户ID：{customer['customer_id']}
+姓名：{customer['name']}
+性别：{customer['gender']}
+年龄：{customer['age']}
+手机号：{customer['phone_masked']}
+身份证：{customer['id_card_masked']}
+风险等级：{customer['risk_level']}
+保单数量：{customer['policy_count']}
+理赔次数：{customer['claim_count']}
+投诉次数：{customer['complaint_count']}
+VIP等级：{customer['vip_level']}
+备注：{customer['remark']}
+"""
+        return result.strip()
+    except Exception as e:
+        logger.error(f"[query_customer_profile]查询失败：{str(e)}", exc_info=True)
+        return f"查询失败：{str(e)}"
 
 
 @tool
-def get_current_month(dummy: str) -> str:
-    """获取当前月份，返回 YYYY-MM 格式字符串。入参可为任意占位字符串。"""
-    return datetime.now().strftime("%Y-%m")
+def compare_products(product_codes: str) -> str:
+    """多产品横向对比，入参逗号分隔产品代码，如 CI-DEMO-001,CI-DEMO-002。客服专用。"""
+    try:
+        codes = [c.strip() for c in product_codes.split(",")]
+        data = _load_mock_json("products.json")
+        products = [p for p in data.get("products", []) if p["product_code"] in codes]
 
+        if not products:
+            return f"未找到产品代码：{product_codes}"
 
-def generate_external_data():
-    """
-    {
-        "user_id": {
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            ...
-        },
-        "user_id": {
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            ...
-        },
-        "user_id": {
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            "month" : {"特征": xxx, "效率": xxx, ...}
-            ...
-        },
-        ...
-    }
-    :return:
-    """
-    if not external_data:
-        external_data_path = get_abs_path(agent_conf["external_data_path"])
+        result = "产品对比：\n"
+        for p in products:
+            result += f"\n【{p['product_code']}】{p['product_name']}\n"
+            result += f"- 类别：{p['category']}\n"
+            result += f"- 描述：{p['description']}\n"
+            result += f"- 投保年龄：{p['min_age']}-{p['max_age']}岁\n"
+            result += f"- 等待期：{p['waiting_period_days']}天\n"
+            result += f"- 保费示例：{p['annual_premium_example']}\n"
 
-        if not os.path.exists(external_data_path):
-            raise FileNotFoundError(f"外部数据文件{external_data_path}不存在")
-
-        with open(external_data_path, "r", encoding="utf-8") as f:
-            for line in f.readlines()[1:]:
-                arr: list[str] = line.strip().split(",")
-
-                user_id: str = arr[0].replace('"', "")
-                feature: str = arr[1].replace('"', "")
-                efficiency: str = arr[2].replace('"', "")
-                consumables: str = arr[3].replace('"', "")
-                comparison: str = arr[4].replace('"', "")
-                time: str = arr[5].replace('"', "")
-
-                if user_id not in external_data:
-                    external_data[user_id] = {}
-
-                external_data[user_id][time] = {
-                    "特征": feature,
-                    "效率": efficiency,
-                    "耗材": consumables,
-                    "对比": comparison,
-                }
+        return result.strip()
+    except Exception as e:
+        logger.error(f"[compare_products]对比失败：{str(e)}", exc_info=True)
+        return f"对比失败：{str(e)}"
 
 
 @tool
-def fetch_external_data(input_text: str) -> str:
-    """从外部系统中获取指定用户在指定月份的使用记录。入参格式：user_id,month，例如：1001,2025-01"""
-    generate_external_data()
-    arr = input_text.split(",", 1)
-    if len(arr) != 2:
-        return "参数格式错误，请使用：user_id,month，例如：1001,2025-01"
-    user_id = arr[0].strip()
-    month = arr[1].strip()
+def check_compliance(scenario: str) -> str:
+    """合规风险检查，传入客服打算说的话或操作描述。客服专用。"""
+    try:
+        router = RagRouter()
+        # 直接查内部库的合规红线
+        result = router.search_single_kb(f"合规检查：{scenario}", kb_name="internal_kb")
+        return f"【合规检查结果】\n{result}"
+    except Exception as e:
+        logger.error(f"[check_compliance]检查失败：{str(e)}", exc_info=True)
+        return f"合规检查失败：{str(e)}"
 
-    # 用户 ID 不存在：如实返回，不能用别人的数据冒充
-    if user_id not in external_data:
-        logger.warning(f"[fetch_external_data]用户 {user_id} 在外部系统中不存在")
-        return f"未找到用户 {user_id} 的任何使用记录，该用户可能尚未激活设备或未关联账户"
 
-    user_records = external_data[user_id]
+# ============ 工具集构建函数 ============
 
-    # 指定月份无数据时，降级为该用户最近一个可用月份的数据
-    # 注意：只在"同一用户"内降级，不跨用户
-    if month not in user_records:
-        if not user_records:
-            return f"用户 {user_id} 无任何月份的使用记录"
-        available_months = sorted(user_records.keys(), reverse=True)
-        fallback_month = available_months[0]
-        logger.warning(f"[fetch_external_data]用户 {user_id} 在 {month} 无数据，降级使用最近月份 {fallback_month}")
-        month = fallback_month
+def build_tools_for_role(role: str):
+    """根据角色返回对应工具集"""
+    base_tools = [
+        make_search_knowledge(role),
+        get_current_date,
+    ]
 
-    record = user_records[month]
-    return (
-        f"用户 {user_id} 在 {month} 的使用记录：\n"
-        f"- 特征：{record['特征']}\n"
-        f"- 清洁效率：{record['效率']}\n"
-        f"- 耗材状态：{record['耗材']}\n"
-        f"- 对比分析：{record['对比']}"
-    )
-#if __name__ =='__main__':
-#    print=(fetch_external_data("1001","2025-01"))
+    if role == "customer":
+        return base_tools + [
+            get_my_policies,
+            get_my_policy_detail,
+            get_my_claim_progress,
+        ]
+    elif role == "agent":
+        return base_tools + [
+            query_any_policy,
+            query_customer_profile,
+            compare_products,
+            check_compliance,
+        ]
+    else:
+        raise ValueError(f"未知角色：{role}")
 
-@tool
-def fill_context_for_report(dummy: str):
-    """调用后触发报告生成场景（兼容单入参工具协议，入参可为任意占位字符串）。"""
-    return "fill_context_for_report已调用"
+
+if __name__ == '__main__':
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    print("=== 测试客户工具 ===")
+    print(get_my_policies.invoke("dummy"))
+    print("\n" + get_my_policy_detail.invoke("P20240001"))
+
+    print("\n=== 测试客服工具 ===")
+    print(query_any_policy.invoke("P20240005"))
+    print("\n" + query_customer_profile.invoke("C002"))

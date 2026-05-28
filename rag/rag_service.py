@@ -12,25 +12,15 @@ from model.factory import chat_model
 from utils.logger_handler import logger
 
 
-def print_prompt(prompt):
-    print("="*20)
-    print(prompt.to_string())
-    print("="*20)
-    return prompt
-
-
 class RagSummarizeService(object):
-    def __init__(self):
-        self.vector_store = VectorStoreService()
+    def __init__(self, kb_name: str = "public_kb"):
+        self.kb_name = kb_name
+        self.vector_store = VectorStoreService(kb_name=kb_name)
         self.retriever = self.vector_store.get_retriever()
         self.prompt_text = load_rag_prompts()
         self.prompt_template = PromptTemplate.from_template(self.prompt_text)
         self.model = chat_model
-        self.chain = self._init_chain()
-
-    def _init_chain(self):
-        chain = self.prompt_template | print_prompt | self.model | StrOutputParser()
-        return chain
+        self.chain = self.prompt_template | self.model | StrOutputParser()
 
     def retriever_docs(self, query: str) -> list[Document]:
         try:
@@ -38,7 +28,7 @@ class RagSummarizeService(object):
         except Exception as e:
             if "no such table: collections" in str(e):
                 logger.warning("[RAG检索]检测到chroma库异常，自动重建后重试一次")
-                self.vector_store = VectorStoreService()
+                self.vector_store = VectorStoreService(kb_name=self.kb_name)
                 self.retriever = self.vector_store.get_retriever()
                 return self.retriever.invoke(query)
             raise e
@@ -62,6 +52,6 @@ class RagSummarizeService(object):
 
 
 if __name__ == '__main__':
-    rag = RagSummarizeService()
+    rag = RagSummarizeService(kb_name="public_kb")
 
-    print(rag.rag_summarize("小户型适合哪些扫地机器人"))
+    print(rag.rag_summarize("重疾险等待期是多久"))
