@@ -114,13 +114,7 @@ echo ""
 # Step 6: 启动服务
 echo -e "${GREEN}[6/6] 启动服务${NC}"
 
-# 检查向量库是否已初始化
-if [ ! -d "chroma_db" ] || [ -z "$(ls -A chroma_db 2>/dev/null)" ]; then
-    echo "初始化向量数据库（首次运行，约 1-2 分钟）..."
-    docker-compose -f docker-compose.lite.yml run --rm app python init_db.py
-fi
-
-echo "启动容器..."
+echo "启动容器（首次启动会自动初始化数据库表和向量库）..."
 docker-compose -f docker-compose.lite.yml up -d --build
 
 echo ""

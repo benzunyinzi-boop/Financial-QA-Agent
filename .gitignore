@@ -71,6 +71,7 @@ frontend/*.local
 
 # Frontend build artifacts (local)
 frontend-dist-*.tar.gz
+frontend-dist.tar.gz
 
 # =========================
 # Streamlit

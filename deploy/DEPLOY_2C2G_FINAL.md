@@ -135,32 +135,28 @@ EOF
 chmod 600 .env
 ```
 
-### 6. 初始化向量数据库
-
-```bash
-docker-compose -f docker-compose.lite.yml run --rm app python init_db.py
-```
-
-### 7. 启动服务
+### 6. 启动服务
 
 ```bash
 docker-compose -f docker-compose.lite.yml up -d --build
 ```
 
-### 8. 验证部署
+> 首次启动时会自动初始化数据库表和向量库（约 1-2 分钟），无需手动执行额外的初始化命令。
+
+### 7. 验证部署
 
 ```bash
 # 查看容器状态
 docker-compose -f docker-compose.lite.yml ps
 
-# 查看日志
+# 查看日志（首次启动会看到知识库加载日志）
 docker-compose -f docker-compose.lite.yml logs -f app
 
 # 测试 API
 curl http://localhost:8000/api/v1/health
 
 # 浏览器访问
-# http://YOUR_ECS_IP:8080
+# http://YOUR_ECS_IP:8090
 ```
 
 ---
@@ -221,7 +217,7 @@ services:
     container_name: insurance-nginx
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "8090:80"
     volumes:
       - ./deploy/nginx-docker.conf:/etc/nginx/conf.d/default.conf:ro
       - ./frontend/dist:/usr/share/nginx/html:ro
@@ -448,7 +444,7 @@ sudo ufw enable
 sudo ufw allow 22/tcp    # SSH
 sudo ufw allow 80/tcp    # HTTP
 sudo ufw allow 443/tcp   # HTTPS
-sudo ufw allow 8080/tcp  # 临时测试端口
+sudo ufw allow 8090/tcp  # Web 访问端口
 
 # 查看状态
 sudo ufw status

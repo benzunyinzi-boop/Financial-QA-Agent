@@ -26,7 +26,7 @@ fi
 PROJECT_DIR="/opt/Financial-QA-Agent"
 REPO_URL="https://github.com/benzunyinzi-boop/Financial-QA-Agent.git"
 
-echo -e "${GREEN}步骤 1/7: 检查系统环境${NC}"
+echo -e "${GREEN}步骤 1/6: 检查系统环境${NC}"
 # 检测操作系统
 if [ -f /etc/os-release ]; then
     . /etc/os-release
@@ -38,7 +38,7 @@ else
 fi
 
 echo ""
-echo -e "${GREEN}步骤 2/7: 安装 Docker${NC}"
+echo -e "${GREEN}步骤 2/6: 安装 Docker${NC}"
 if ! command -v docker &> /dev/null; then
     echo "Docker 未安装，正在安装..."
     curl -fsSL https://get.docker.com | sh
@@ -50,7 +50,7 @@ else
 fi
 
 echo ""
-echo -e "${GREEN}步骤 3/7: 安装 Docker Compose${NC}"
+echo -e "${GREEN}步骤 3/6: 安装 Docker Compose${NC}"
 if ! command -v docker-compose &> /dev/null; then
     echo "Docker Compose 未安装，正在安装..."
     curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
@@ -61,7 +61,7 @@ else
 fi
 
 echo ""
-echo -e "${GREEN}步骤 4/7: 克隆项目代码${NC}"
+echo -e "${GREEN}步骤 4/6: 克隆项目代码${NC}"
 if [ -d "$PROJECT_DIR" ]; then
     echo "项目目录已存在，拉取最新代码..."
     cd $PROJECT_DIR
@@ -73,7 +73,7 @@ else
 fi
 
 echo ""
-echo -e "${GREEN}步骤 5/7: 配置环境变量${NC}"
+echo -e "${GREEN}步骤 5/6: 配置环境变量${NC}"
 if [ ! -f .env ]; then
     echo -e "${YELLOW}请输入 DashScope API Key:${NC}"
     read -p "API Key: " api_key
@@ -89,17 +89,7 @@ else
 fi
 
 echo ""
-echo -e "${GREEN}步骤 6/7: 初始化向量数据库${NC}"
-if [ ! -d "chroma_db" ] || [ -z "$(ls -A chroma_db)" ]; then
-    echo "初始化知识库..."
-    docker-compose run --rm app python init_db.py
-    echo "知识库初始化完成"
-else
-    echo "向量数据库已存在，跳过初始化"
-fi
-
-echo ""
-echo -e "${GREEN}步骤 7/7: 启动服务${NC}"
+echo -e "${GREEN}步骤 6/6: 启动服务（首次启动会自动初始化数据库表和向量库）${NC}"
 docker-compose up -d --build
 
 echo ""

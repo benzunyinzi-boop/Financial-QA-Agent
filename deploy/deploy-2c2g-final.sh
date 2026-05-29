@@ -28,7 +28,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Step 1: 检查 Docker
-echo -e "${GREEN}[1/7] 检查 Docker${NC}"
+echo -e "${GREEN}[1/6] 检查 Docker${NC}"
 if ! command -v docker &> /dev/null; then
     echo "安装 Docker..."
     curl -fsSL https://get.docker.com | sh
@@ -45,7 +45,7 @@ echo "Compose: $(docker-compose --version)"
 echo ""
 
 # Step 2: 配置 Swap（2核2G 必需）
-echo -e "${GREEN}[2/7] 配置 Swap${NC}"
+echo -e "${GREEN}[2/6] 配置 Swap${NC}"
 SWAP_SIZE=$(free -m | awk '/^Swap:/ {print $2}')
 if [ "$SWAP_SIZE" -lt 1024 ]; then
     echo -e "${YELLOW}当前 swap: ${SWAP_SIZE}MB，配置 2GB swap...${NC}"
@@ -80,7 +80,7 @@ free -h
 echo ""
 
 # Step 3: 克隆/更新代码
-echo -e "${GREEN}[3/7] 获取项目代码${NC}"
+echo -e "${GREEN}[3/6] 获取项目代码${NC}"
 if [ -d "$PROJECT_DIR" ]; then
     cd "$PROJECT_DIR"
     echo "项目目录已存在，拉取最新代码..."
@@ -93,7 +93,7 @@ fi
 echo ""
 
 # Step 4: 配置环境变量
-echo -e "${GREEN}[4/7] 配置环境变量${NC}"
+echo -e "${GREEN}[4/6] 配置环境变量${NC}"
 if [ ! -f .env ]; then
     echo -e "${YELLOW}请输入 DashScope API Key:${NC}"
     read -p "API Key: " api_key
@@ -110,7 +110,7 @@ fi
 echo ""
 
 # Step 5: 检查前端 dist
-echo -e "${GREEN}[5/7] 检查前端构建产物${NC}"
+echo -e "${GREEN}[5/6] 检查前端构建产物${NC}"
 if [ ! -d "frontend/dist" ] || [ -z "$(ls -A frontend/dist 2>/dev/null)" ]; then
     echo -e "${RED}错误：frontend/dist 目录不存在或为空！${NC}"
     echo ""
@@ -127,19 +127,8 @@ DIST_SIZE=$(du -sh frontend/dist | cut -f1)
 echo "frontend/dist: $DIST_SIZE ✓"
 echo ""
 
-# Step 6: 初始化向量数据库
-echo -e "${GREEN}[6/7] 初始化向量数据库${NC}"
-if [ ! -d "chroma_db" ] || [ -z "$(ls -A chroma_db 2>/dev/null)" ]; then
-    echo "初始化知识库（首次运行，约 1-2 分钟）..."
-    docker-compose -f docker-compose.lite.yml run --rm app python init_db.py
-    echo "知识库初始化完成"
-else
-    echo "向量数据库已存在，跳过初始化"
-fi
-echo ""
-
-# Step 7: 启动服务
-echo -e "${GREEN}[7/7] 启动服务${NC}"
+# Step 6: 启动服务（首次启动会自动初始化数据库表和向量库）
+echo -e "${GREEN}[6/6] 启动服务${NC}"
 docker-compose -f docker-compose.lite.yml up -d --build
 
 echo ""
@@ -148,14 +137,17 @@ echo -e "${GREEN}  部署完成！${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
-sleep 3
+sleep 5
 docker-compose -f docker-compose.lite.yml ps
 
 echo ""
 PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_ECS_IP")
 echo "访问地址:"
-echo "  - 前端: http://$PUBLIC_IP:8080"
+echo "  - 前端: http://$PUBLIC_IP:8090"
 echo "  - API 文档: http://$PUBLIC_IP:8000/docs"
+echo ""
+echo -e "${YELLOW}首次启动会自动加载知识库（约 1-2 分钟），请稍等${NC}"
+echo "可通过 'docker-compose -f docker-compose.lite.yml logs -f app' 查看初始化进度"
 echo ""
 echo "常用命令:"
 echo "  查看日志: cd $PROJECT_DIR && docker-compose -f docker-compose.lite.yml logs -f"

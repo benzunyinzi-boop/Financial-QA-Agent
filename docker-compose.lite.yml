@@ -12,7 +12,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.lite
-    container_name: robot-vacuum-agent
+    container_name: insurance-agent
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -52,11 +52,10 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: robot-vacuum-nginx
+    container_name: insurance-nginx
     restart: unless-stopped
     ports:
-      - "8080:80"
-      - "8443:443"
+      - "8090:80"
     volumes:
       - ./deploy/nginx-docker.conf:/etc/nginx/conf.d/default.conf:ro
       - ./frontend/dist:/usr/share/nginx/html:ro
