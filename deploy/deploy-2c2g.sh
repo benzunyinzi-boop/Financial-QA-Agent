@@ -1,6 +1,6 @@
 #!/bin/bash
 # 2核2G ECS 一键部署脚本
-# 前置条件：前端 dist 已经提前在本地构建好并上传到 /opt/robot-vacuum-customer-agent/frontend/dist/
+# 前置条件：前端 dist 已经提前在本地构建好并上传到 /opt/Financial-QA-Agent/frontend/dist/
 #
 # 完整流程：
 #   1. 在本地: bash deploy/build-frontend.sh
@@ -14,11 +14,11 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-PROJECT_DIR="/opt/robot-vacuum-customer-agent"
-REPO_URL="https://github.com/benzunyinzi-boop/robot-vacuum-customer-agent.git"
+PROJECT_DIR="/opt/Financial-QA-Agent"
+REPO_URL="https://github.com/benzunyinzi-boop/Financial-QA-Agent.git"
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  扫地机器人智能客服 - 2核2G 部署${NC}"
+echo -e "${GREEN}  保险助手智能客服 - 2核2G 部署${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
@@ -100,7 +100,7 @@ if [ ! -d "frontend/dist" ] || [ -z "$(ls -A frontend/dist 2>/dev/null)" ]; then
     echo -e "${RED}错误：frontend/dist 目录不存在或为空！${NC}"
     echo ""
     echo "请在本地构建前端后上传："
-    echo "  1. 本地: git clone $REPO_URL && cd robot-vacuum-customer-agent"
+    echo "  1. 本地: git clone $REPO_URL && cd Financial-QA-Agent"
     echo "  2. 本地: bash deploy/build-frontend.sh"
     echo "  3. 本地: scp frontend-dist-*.tar.gz root@$(curl -s ifconfig.me):$PROJECT_DIR/"
     echo "  4. ECS:  cd $PROJECT_DIR && tar -xzf frontend-dist-*.tar.gz"

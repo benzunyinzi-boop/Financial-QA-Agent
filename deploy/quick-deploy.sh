@@ -23,8 +23,8 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # 配置变量
-PROJECT_DIR="/opt/robot-vacuum-customer-agent"
-REPO_URL="https://github.com/benzunyinzi-boop/robot-vacuum-customer-agent.git"
+PROJECT_DIR="/opt/Financial-QA-Agent"
+REPO_URL="https://github.com/benzunyinzi-boop/Financial-QA-Agent.git"
 
 echo -e "${GREEN}步骤 1/7: 检查系统环境${NC}"
 # 检测操作系统

@@ -9,7 +9,7 @@
 ### 1.1 检查容器是否启动
 
 ```bash
-cd /opt/robot-vacuum-customer-agent
+cd /opt/Financial-QA-Agent
 
 # 标准部署
 docker-compose ps
@@ -289,7 +289,7 @@ Swap:          2.0Gi        50Mi       1.9Gi
 ### 6.1 检查 .env 权限
 
 ```bash
-ls -la /opt/robot-vacuum-customer-agent/.env
+ls -la /opt/Financial-QA-Agent/.env
 ```
 
 **预期**：
@@ -530,7 +530,7 @@ echo -e "==========================================${NC}"
 
 **使用方法**：
 ```bash
-cd /opt/robot-vacuum-customer-agent
+cd /opt/Financial-QA-Agent
 bash verify.sh
 ```
 

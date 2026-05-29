@@ -4,8 +4,8 @@
 
 set -e
 
-PROJECT_DIR="/opt/robot-vacuum-customer-agent"
-REPO_URL="https://github.com/benzunyinzi-boop/robot-vacuum-customer-agent.git"
+PROJECT_DIR="/opt/Financial-QA-Agent"
+REPO_URL="https://github.com/benzunyinzi-boop/Financial-QA-Agent.git"
 BRANCH="main"
 
 echo "=== 1. 克隆/更新代码 ==="

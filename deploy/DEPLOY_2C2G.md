@@ -33,8 +33,8 @@
 
 ```bash
 # 克隆项目到本地
-git clone https://github.com/benzunyinzi-boop/robot-vacuum-customer-agent.git
-cd robot-vacuum-customer-agent
+git clone https://github.com/benzunyinzi-boop/Financial-QA-Agent.git
+cd Financial-QA-Agent
 
 # 运行构建脚本
 bash deploy/build-frontend.sh
@@ -82,8 +82,8 @@ docker-compose --version
 ```bash
 # 克隆项目（只克隆，不构建）
 cd /opt
-git clone https://github.com/benzunyinzi-boop/robot-vacuum-customer-agent.git
-cd robot-vacuum-customer-agent
+git clone https://github.com/benzunyinzi-boop/Financial-QA-Agent.git
+cd Financial-QA-Agent
 
 # 运行 swap 配置脚本
 sudo bash deploy/setup-swap.sh
@@ -106,11 +106,11 @@ free -h
 
 ```bash
 # 方式 A：SCP 上传 tar 包
-scp frontend-dist-*.tar.gz root@YOUR_ECS_IP:/opt/robot-vacuum-customer-agent/
+scp frontend-dist-*.tar.gz root@YOUR_ECS_IP:/opt/Financial-QA-Agent/
 
 # 然后在 ECS 上解压
 ssh root@YOUR_ECS_IP
-cd /opt/robot-vacuum-customer-agent
+cd /opt/Financial-QA-Agent
 tar -xzf frontend-dist-*.tar.gz
 rm frontend-dist-*.tar.gz
 ls -la frontend/dist/   # 验证
@@ -121,7 +121,7 @@ ls -la frontend/dist/   # 验证
 ```bash
 rsync -avz --delete \
   frontend/dist/ \
-  root@YOUR_ECS_IP:/opt/robot-vacuum-customer-agent/frontend/dist/
+  root@YOUR_ECS_IP:/opt/Financial-QA-Agent/frontend/dist/
 ```
 
 ### Step 4：在 ECS 上启动服务（约 5 分钟）
@@ -129,7 +129,7 @@ rsync -avz --delete \
 **在 ECS 上执行**：
 
 ```bash
-cd /opt/robot-vacuum-customer-agent
+cd /opt/Financial-QA-Agent
 
 # 配置 .env
 cat > .env <<EOF
@@ -212,7 +212,7 @@ docker stats
 
 ```bash
 # 在 ECS 上
-cd /opt/robot-vacuum-customer-agent
+cd /opt/Financial-QA-Agent
 git pull origin main
 docker-compose -f docker-compose.lite.yml up -d --build
 ```
@@ -221,17 +221,17 @@ docker-compose -f docker-compose.lite.yml up -d --build
 
 ```bash
 # 在本地
-cd robot-vacuum-customer-agent
+cd Financial-QA-Agent
 git pull origin main
 bash deploy/build-frontend.sh
 
 # 同步到 ECS
 rsync -avz --delete \
   frontend/dist/ \
-  root@YOUR_ECS_IP:/opt/robot-vacuum-customer-agent/frontend/dist/
+  root@YOUR_ECS_IP:/opt/Financial-QA-Agent/frontend/dist/
 
 # 在 ECS 上重启 Nginx（或热重载）
-ssh root@YOUR_ECS_IP 'cd /opt/robot-vacuum-customer-agent && docker-compose -f docker-compose.lite.yml restart nginx'
+ssh root@YOUR_ECS_IP 'cd /opt/Financial-QA-Agent && docker-compose -f docker-compose.lite.yml restart nginx'
 ```
 
 ---
@@ -309,7 +309,7 @@ sudo rm /swapfile
 sudo sed -i '/swapfile/d' /etc/fstab
 
 # 3. 切换回标准 Dockerfile
-cd /opt/robot-vacuum-customer-agent
+cd /opt/Financial-QA-Agent
 docker-compose down
 docker-compose up -d --build  # 使用标准 docker-compose.yml
 ```
