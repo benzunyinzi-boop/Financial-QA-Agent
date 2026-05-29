@@ -14,8 +14,12 @@ services:
       dockerfile: Dockerfile.lite
     container_name: insurance-agent
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    # 不暴露 8000 到主机，仅通过 docker network 内部供 nginx 访问
+    # 如需调试可临时取消注释下面两行
+    # ports:
+    #   - "8000:8000"
+    expose:
+      - "8000"
     environment:
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

@@ -144,7 +144,7 @@ echo ""
 PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_ECS_IP")
 echo "访问地址:"
 echo "  - 前端: http://$PUBLIC_IP:8090"
-echo "  - API 文档: http://$PUBLIC_IP:8000/docs"
+echo "  - API 文档: http://$PUBLIC_IP:8090/api/docs"
 echo ""
 echo -e "${YELLOW}首次启动会自动加载知识库（约 1-2 分钟），请稍等${NC}"
 echo "可通过 'docker-compose -f docker-compose.lite.yml logs -f app' 查看初始化进度"

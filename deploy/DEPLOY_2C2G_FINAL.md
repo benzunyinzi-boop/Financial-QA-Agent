@@ -152,8 +152,11 @@ docker-compose -f docker-compose.lite.yml ps
 # 查看日志（首次启动会看到知识库加载日志）
 docker-compose -f docker-compose.lite.yml logs -f app
 
-# 测试 API
-curl http://localhost:8000/api/v1/health
+# 测试 API（通过 Nginx 转发，因为 8000 端口不再暴露到主机）
+curl http://localhost:8090/api/v1/health
+
+# 或直接进入容器测试
+docker exec insurance-agent curl http://localhost:8000/api/v1/health
 
 # 浏览器访问
 # http://YOUR_ECS_IP:8090
@@ -177,8 +180,9 @@ services:
       dockerfile: Dockerfile.lite
     container_name: insurance-agent
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    # 后端不暴露到主机端口，仅通过 docker network 内部供 nginx 访问
+    expose:
+      - "8000"
     environment:
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

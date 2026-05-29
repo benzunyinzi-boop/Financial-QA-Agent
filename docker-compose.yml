@@ -4,10 +4,10 @@ services:
   # FastAPI 后端 + 前端静态文件
   app:
     build: .
-    container_name: langchain-agent
+    container_name: insurance-agent
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     environment:
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -27,10 +27,10 @@ services:
       retries: 3
       start_period: 40s
 
-  # Nginx 反向代理（可选，用于生产环境）
+  # Nginx 反向代理
   nginx:
     image: nginx:alpine
-    container_name: langchain-nginx
+    container_name: insurance-nginx
     restart: unless-stopped
     ports:
       - "8090:80"
