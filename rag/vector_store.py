@@ -7,7 +7,7 @@ from model.factory import embed_model
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from utils.path_tool import get_abs_path
-from utils.file_handler import pdf_loader, txt_loader, listdir_with_allowed_type, get_file_md5_hex
+from utils.file_handler import pdf_loader, txt_loader, pptx_loader, listdir_with_allowed_type, get_file_md5_hex
 
 from pathlib import Path
 from datetime import datetime
@@ -146,6 +146,8 @@ class VectorStoreService:
                 return txt_loader(read_path)
             if read_path.endswith("pdf"):
                 return pdf_loader(read_path)
+            if read_path.endswith("pptx"):
+                return pptx_loader(read_path)
             return []
 
         try:
@@ -227,6 +229,9 @@ class VectorStoreService:
 
             if read_path.endswith("pdf"):
                 return pdf_loader(read_path)
+
+            if read_path.endswith("pptx"):
+                return pptx_loader(read_path)
 
             return []
 

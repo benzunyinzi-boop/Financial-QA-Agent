@@ -40,6 +40,79 @@ def pdf_loader(filepath: str, passwd: str = None) -> list[Document]:
     # PyMuPDFLoader 相比 PyPDFLoader 能更好地保留表格、多栏布局和页眉页脚结构
     return PyMuPDFLoader(filepath, password=passwd or "").load()
 
+
+def pptx_loader(filepath: str) -> list[Document]:
+    """
+    PPT 加载器：每页 slide 一个 Document，提取标题/正文/备注/表格
+    PPT 一页就是一个完整语义单元，不再做字符级切分
+    """
+    try:
+        from pptx import Presentation
+    except ImportError:
+        logger.error("[PPT加载]缺少依赖 python-pptx，请安装：pip install python-pptx")
+        return []
+
+    docs: list[Document] = []
+    try:
+        prs = Presentation(filepath)
+    except Exception as e:
+        logger.error(f"[PPT加载]打开 {filepath} 失败：{e}")
+        return []
+
+    for idx, slide in enumerate(prs.slides):
+        slide_no = idx + 1
+
+        # 1) 主体文字（标题、正文、形状内文字）
+        text_parts = []
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                tf_text = "\n".join(
+                    p.text for p in shape.text_frame.paragraphs if p.text.strip()
+                )
+                if tf_text.strip():
+                    text_parts.append(tf_text)
+
+        # 2) 表格（结构化提取为简单文本）
+        table_parts = []
+        for shape in slide.shapes:
+            if shape.has_table:
+                rows = []
+                for row in shape.table.rows:
+                    cells = [cell.text.strip() for cell in row.cells]
+                    rows.append(" | ".join(cells))
+                if rows:
+                    table_parts.append("\n".join(rows))
+
+        # 3) 备注（销售话术 PPT 的备注通常是干货）
+        notes = ""
+        if slide.has_notes_slide:
+            notes = slide.notes_slide.notes_text_frame.text.strip()
+
+        # 拼接
+        content_blocks = []
+        if text_parts:
+            content_blocks.append("\n".join(text_parts))
+        if table_parts:
+            content_blocks.append("【表格】\n" + "\n\n".join(table_parts))
+        if notes:
+            content_blocks.append("【备注】\n" + notes)
+
+        page_content = "\n\n".join(content_blocks).strip()
+        if not page_content:
+            continue
+
+        docs.append(Document(
+            page_content=page_content,
+            metadata={
+                "page": slide_no,           # 与 PyMuPDFLoader 的 page 字段对齐
+                "slide_index": slide_no,    # PPT 专属字段
+            },
+        ))
+
+    logger.info(f"[PPT加载]{filepath} 提取 {len(docs)}/{len(prs.slides)} 页有效内容")
+    return docs
+
+
 def txt_loader(filepath:str)->list[Document]:
 
     return TextLoader(filepath,encoding="utf-8").load()
