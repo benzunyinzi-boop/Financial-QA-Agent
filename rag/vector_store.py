@@ -8,6 +8,10 @@ from model.factory import embed_model
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from utils.path_tool import get_abs_path
 from utils.file_handler import pdf_loader, txt_loader, listdir_with_allowed_type, get_file_md5_hex
+
+from pathlib import Path
+from datetime import datetime
+import uuid
 from utils.logger_handler import logger
 
 import os
@@ -108,6 +112,28 @@ class VectorStoreService:
             logger.error(f"[向量库]拉取所有文档失败：{str(e)}", exc_info=True)
             return []
 
+    @staticmethod
+    def _enrich_metadata(docs: list[Document], file_path: str, document_id: str, kb_name: str):
+        """
+        统一写入 metadata，两处加载（单文件/批量）都用这个。
+        新增字段：source_type / modality / load_time / page（PDF 页码规范化 0→1 起）
+        """
+        source_type = Path(file_path).suffix.lstrip(".").lower()
+        load_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for i, doc in enumerate(docs):
+            doc.metadata.update({
+                "document_id": document_id,
+                "chunk_index": i,
+                "source_file": Path(file_path).name,
+                "source_type": source_type,
+                "kb_name": kb_name,
+                "modality": "text",
+                "load_time": load_time,
+            })
+            # PyPDFLoader 写入的 page 是 0-indexed，统一转为 1-indexed
+            if "page" in doc.metadata:
+                doc.metadata["page"] = doc.metadata["page"] + 1
+
     def load_single_document(self, file_path: str, document_id: str) -> int:
         """
         加载单个文档到向量库
@@ -135,12 +161,8 @@ class VectorStoreService:
                 logger.warning(f"[加载知识库]{file_path}分片后没有有效文本内容")
                 return 0
 
-            # 在每个分块的 metadata 中添加 document_id 和 kb_name
-            for i, doc in enumerate(split_document):
-                doc.metadata["document_id"] = document_id
-                doc.metadata["chunk_index"] = i
-                doc.metadata["source_file"] = os.path.basename(file_path)
-                doc.metadata["kb_name"] = self.kb_name
+            # 统一写入扩展 metadata
+            self._enrich_metadata(split_document, file_path, document_id, self.kb_name)
 
             # DashScope Embedding API 限制每批次最多 10 个文档
             batch_size = 10
@@ -238,6 +260,10 @@ class VectorStoreService:
                 if not split_document:
                     logger.warning(f"[加载知识库]{path}分片后没有有效文本内容，跳过")
                     continue
+
+                # 写入扩展 metadata（修复：批量加载之前也需要写）
+                document_id = str(uuid.uuid4())
+                self._enrich_metadata(split_document, path, document_id, self.kb_name)
 
                 # 将内容存入向量库（DashScope Embedding API 限制每批次最多 10 个）
                 batch_size = 10
