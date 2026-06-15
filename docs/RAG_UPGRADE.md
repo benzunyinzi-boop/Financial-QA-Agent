@@ -12,8 +12,8 @@
 | **检索精度** | 无 | DashScope gte-rerank-v2 精排 | `rag/reranker.py` |
 | **PDF 解析** | PyPDFLoader（表格丢失） | PyMuPDFLoader / pymupdf4llm | `utils/file_handler.py` |
 | **切分策略** | 仅按字符切（600/80） | 智能切分：markdown 章节 + 字符兜底 | `rag/vector_store.py::_smart_split` |
-| **支持格式** | txt / pdf / md | + pptx / png / jpg / jpeg | `config/chroma.yml` |
-| **多模态** | 无 | PPT 按页解析 + 图片 VLM 描述 | `utils/file_handler.py` |
+| **支持格式** | txt / pdf / md | + pptx / png / jpg / jpeg / wav / mp3 / m4a / flac / aac | `config/chroma.yml` |
+| **多模态** | 无 | PPT 按页 + 图片 VLM + 音频 ASR | `utils/file_handler.py` |
 | **Metadata** | 4 个字段 | 9+ 字段（含章节、模态、时间戳） | `vector_store.py::_enrich_metadata` |
 | **评测体系** | 仅扫地机器人题集 | 保险领域 35 题 + Hit@K/MRR 评测脚本 | `evaluation/` |
 
@@ -72,7 +72,7 @@
 
 ---
 
-## 三、8 项升级清单
+## 三、9 项升级清单
 
 ### 1. Rerank 精排 ✅
 
@@ -177,7 +177,29 @@ markdown 文档 → MarkdownHeaderTextSplitter (按 # / ## / ###)
 
 定制 prompt：保险场景重点提取保单号、保额、保费、条款编号。
 
-### 7. Metadata Schema 重构 ✅
+### 7. 音频 Loader ✅
+
+**文件**：`utils/file_handler.py::audio_loader`
+
+```
+音频文件 → DashScope Paraformer-realtime-v2 流式 ASR
+        → 每个识别出的句子 → 1 个 Document
+        → metadata: timestamp_start / timestamp_end (秒)
+        → modality: audio_transcript
+
+OrderedDict LRU 缓存（cap=64）按音频 MD5 缓存
+```
+
+**支持格式**：wav / mp3 / m4a / flac / aac / opus / pcm
+
+**关键设计**：
+- 流式推送 3200 字节/100ms，实时拿到 segment 结果
+- 每个 segment 带 ms 级时间戳，支持「销售在第几分钟提到等待期」精准定位
+- ASR 失败返回空列表，不阻塞批量加载流程
+
+**典型场景**：销售培训录音、客服通话录音、产品讲解视频音轨。
+
+### 8. Metadata Schema 重构 ✅
 
 **文件**：`rag/vector_store.py::_enrich_metadata`
 
@@ -198,7 +220,7 @@ markdown 文档 → MarkdownHeaderTextSplitter (按 # / ## / ###)
 
 **修复**：原 `load_document()` 批量加载完全没写 metadata（document_id 等都缺），已修复。
 
-### 8. 评测体系 ✅
+### 9. 评测体系 ✅
 
 **文件**：`evaluation/`
 

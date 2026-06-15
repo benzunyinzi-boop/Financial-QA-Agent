@@ -7,7 +7,7 @@ from model.factory import embed_model
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 from utils.path_tool import get_abs_path
-from utils.file_handler import pdf_loader, pdf_markdown_loader, txt_loader, pptx_loader, image_loader, listdir_with_allowed_type, get_file_md5_hex
+from utils.file_handler import pdf_loader, pdf_markdown_loader, txt_loader, pptx_loader, image_loader, audio_loader, listdir_with_allowed_type, get_file_md5_hex
 
 from pathlib import Path
 from datetime import datetime
@@ -213,6 +213,8 @@ class VectorStoreService:
                 return pptx_loader(read_path)
             if read_path.endswith((".png", ".jpg", ".jpeg")):
                 return image_loader(read_path)
+            if read_path.endswith((".wav", ".mp3", ".m4a", ".flac", ".aac", ".opus")):
+                return audio_loader(read_path)
             return []
 
         try:
@@ -302,6 +304,9 @@ class VectorStoreService:
 
             if read_path.endswith((".png", ".jpg", ".jpeg")):
                 return image_loader(read_path)
+
+            if read_path.endswith((".wav", ".mp3", ".m4a", ".flac", ".aac", ".opus")):
+                return audio_loader(read_path)
 
             return []
 

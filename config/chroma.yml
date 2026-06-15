@@ -3,7 +3,7 @@ persist_directory : chroma_db
 k : 4
 data_path : data/insurance
 md5_hex_store : md5.txt
-allow_knowledge_file_type : ["txt","pdf","md","pptx","png","jpg","jpeg"]
+allow_knowledge_file_type : ["txt","pdf","md","pptx","png","jpg","jpeg","wav","mp3","m4a","flac","aac","opus"]
 
 # PDF 加载模式：
 #   text     - PyMuPDFLoader 纯文本（默认，兼容现有 chroma_db）

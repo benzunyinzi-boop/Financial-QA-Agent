@@ -1,4 +1,5 @@
 import os, hashlib, base64
+from collections import OrderedDict
 from functools import lru_cache
 from utils.logger_handler import logger
 
@@ -237,3 +238,139 @@ def image_loader(filepath: str, prompt: str = None) -> list[Document]:
             "image_md5": image_md5,
         },
     )]
+
+
+# ---------- 音频加载（DashScope Paraformer ASR + 缓存）----------
+
+# 简单 LRU 缓存：audio_md5 → tuple[dict] segments
+_AUDIO_CACHE: "OrderedDict[str, tuple]" = OrderedDict()
+_AUDIO_CACHE_MAX_SIZE = 64
+
+# DashScope Paraformer 支持的音频格式
+_SUPPORTED_AUDIO_EXT = ("wav", "mp3", "m4a", "flac", "aac", "opus", "pcm")
+
+
+def _audio_cache_get(audio_md5: str):
+    if audio_md5 in _AUDIO_CACHE:
+        _AUDIO_CACHE.move_to_end(audio_md5)
+        return _AUDIO_CACHE[audio_md5]
+    return None
+
+
+def _audio_cache_set(audio_md5: str, value: tuple):
+    _AUDIO_CACHE[audio_md5] = value
+    _AUDIO_CACHE.move_to_end(audio_md5)
+    while len(_AUDIO_CACHE) > _AUDIO_CACHE_MAX_SIZE:
+        _AUDIO_CACHE.popitem(last=False)
+
+
+def _transcribe_audio(filepath: str) -> tuple:
+    """
+    调用 DashScope Paraformer-realtime-v2 转写音频
+    返回 tuple[dict]，每个 dict 含 text / begin_time(ms) / end_time(ms)
+    异常时返回空 tuple（上层做降级）
+    """
+    try:
+        from dashscope.audio.asr import Recognition, RecognitionCallback
+    except ImportError:
+        logger.error("[音频加载]缺少 dashscope.audio.asr 模块，跳过 ASR")
+        return tuple()
+
+    ext = os.path.splitext(filepath)[1].lstrip(".").lower()
+    if ext not in _SUPPORTED_AUDIO_EXT:
+        logger.warning(f"[音频加载]不支持的格式：{ext}")
+        return tuple()
+
+    # 累积识别结果的回调
+    class _Callback(RecognitionCallback):
+        def __init__(self):
+            self.sentences = []
+
+        def on_open(self):
+            pass
+
+        def on_close(self):
+            pass
+
+        def on_event(self, result):
+            try:
+                sentence = result.get_sentence()
+                if sentence and sentence.get("text"):
+                    self.sentences.append({
+                        "text": sentence["text"],
+                        "begin_time": sentence.get("begin_time", 0),
+                        "end_time": sentence.get("end_time", 0),
+                    })
+            except Exception as e:
+                logger.debug(f"[音频加载]on_event 解析失败：{e}")
+
+    callback = _Callback()
+    recognition = Recognition(
+        model="paraformer-realtime-v2",
+        format=ext,
+        sample_rate=16000,    # paraformer-realtime-v2 默认 16kHz
+        callback=callback,
+    )
+
+    try:
+        recognition.start()
+        with open(filepath, "rb") as f:
+            while True:
+                chunk = f.read(3200)    # 100ms@16kHz/16bit/mono = 3200 字节
+                if not chunk:
+                    break
+                recognition.send_audio_frame(chunk)
+        recognition.stop()
+    except Exception as e:
+        logger.error(f"[音频加载]ASR 调用异常 {filepath}：{e}", exc_info=True)
+        return tuple()
+
+    return tuple(callback.sentences)
+
+
+def audio_loader(filepath: str) -> list[Document]:
+    """
+    音频加载器：用 DashScope Paraformer-realtime-v2 转写
+    每个识别出的句子 → 1 个 Document，metadata 含时间戳（用于跳转回放）
+    支持 wav / mp3 / m4a / flac / aac / opus / pcm
+    内置 LRU 缓存（按音频 MD5），避免重复昂贵 ASR 调用
+    """
+    if not os.path.exists(filepath):
+        logger.error(f"[音频加载]{filepath} 不存在")
+        return []
+
+    audio_md5 = get_file_md5_hex(filepath)
+    if not audio_md5:
+        return []
+
+    # 缓存命中？
+    segments = _audio_cache_get(audio_md5)
+    if segments is None:
+        segments = _transcribe_audio(filepath)
+        if segments:
+            _audio_cache_set(audio_md5, segments)
+
+    if not segments:
+        logger.warning(f"[音频加载]{filepath} ASR 转写为空")
+        return []
+
+    docs = []
+    for i, seg in enumerate(segments):
+        docs.append(Document(
+            page_content=seg["text"],
+            metadata={
+                "source": filepath,
+                "modality": "audio_transcript",       # _enrich_metadata 不会覆盖
+                "segment_index": i,
+                "timestamp_start": seg.get("begin_time", 0) / 1000.0,   # ms → s
+                "timestamp_end": seg.get("end_time", 0) / 1000.0,
+                "audio_md5": audio_md5,
+                "original_audio_path": filepath,
+            },
+        ))
+
+    logger.info(
+        f"[音频加载]{filepath} 转写完成，共 {len(docs)} 句，"
+        f"总时长 {docs[-1].metadata['timestamp_end']:.1f}s"
+    )
+    return docs
