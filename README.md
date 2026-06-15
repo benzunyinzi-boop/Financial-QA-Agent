@@ -55,12 +55,12 @@
 ### 2. Agent 工具调用
 展示 Agent 调用 RAG 检索、外部工具的推理过程
 
-<img src="assets/chatting.png" width="700"/>
+<img src="assets/chat.png" width="700"/>
 
-### 3. 报告生成
-根据用户数据生成个性化保险分析报告
+### 3. 角色切换
+客户/客服双角色定位可用
 
-<img src="assets/chat3.png" width="700"/>
+<img src="assets/change.png" width="700"/>
 
 ---
 
