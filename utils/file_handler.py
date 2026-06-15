@@ -41,6 +41,33 @@ def pdf_loader(filepath: str, passwd: str = None) -> list[Document]:
     return PyMuPDFLoader(filepath, password=passwd or "").load()
 
 
+def pdf_markdown_loader(filepath: str) -> list[Document]:
+    """
+    PDF → Markdown 加载器（保留章节标题结构，便于 MarkdownHeaderTextSplitter 切分）
+    适用：标题层级清晰的 PDF（如规范化的保险条款）
+    备注：扫描件 / 排版混乱的 PDF 用纯文本 pdf_loader 反而更好
+    """
+    try:
+        import pymupdf4llm
+    except ImportError:
+        logger.warning("[PDF→Markdown]缺少 pymupdf4llm，降级为 pdf_loader")
+        return pdf_loader(filepath)
+
+    try:
+        md_text = pymupdf4llm.to_markdown(filepath)
+    except Exception as e:
+        logger.warning(f"[PDF→Markdown]{filepath} 转 Markdown 失败：{e}，降级为 pdf_loader")
+        return pdf_loader(filepath)
+
+    if not md_text or not md_text.strip():
+        return pdf_loader(filepath)
+
+    return [Document(
+        page_content=md_text,
+        metadata={"source": filepath, "original_format": "markdown"},
+    )]
+
+
 def pptx_loader(filepath: str) -> list[Document]:
     """
     PPT 加载器：每页 slide 一个 Document，提取标题/正文/备注/表格

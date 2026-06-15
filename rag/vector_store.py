@@ -5,9 +5,9 @@ from chromadb.config import Settings
 
 from model.factory import embed_model
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 from utils.path_tool import get_abs_path
-from utils.file_handler import pdf_loader, txt_loader, pptx_loader, listdir_with_allowed_type, get_file_md5_hex
+from utils.file_handler import pdf_loader, pdf_markdown_loader, txt_loader, pptx_loader, listdir_with_allowed_type, get_file_md5_hex
 
 from pathlib import Path
 from datetime import datetime
@@ -33,6 +33,19 @@ class VectorStoreService:
             separators=chroma_conf["separators"],
             length_function=len,
         )
+
+        # Markdown 章节切分器（仅对 original_format=markdown 的文档启用）
+        self.md_splitter = MarkdownHeaderTextSplitter(
+            headers_to_split_on=[
+                ("#", "section_h1"),
+                ("##", "section_h2"),
+                ("###", "section_h3"),
+            ],
+            strip_headers=False,    # 保留标题在内容里，提升检索召回
+        )
+
+        # PDF 加载模式：text（PyMuPDF 纯文本）/ markdown（pymupdf4llm 输出 markdown）
+        self.pdf_loader_mode = chroma_conf.get("pdf_loader_mode", "text")
 
         self._ensure_vector_store_ready()
 
@@ -134,6 +147,51 @@ class VectorStoreService:
             if "page" in doc.metadata:
                 doc.metadata["page"] = doc.metadata["page"] + 1
 
+    def _smart_split(self, documents: list[Document]) -> list[Document]:
+        """
+        智能切分：
+        - markdown 文档（metadata.original_format='markdown'）先按章节切，再用字符切分兜底超长 chunk
+        - 其他文档直接按字符切分（与原行为一致）
+
+        章节信息（h1/h2/h3）会自动写入 metadata 的 section_h1/section_h2/section_h3
+        """
+        md_docs = [d for d in documents if d.metadata.get("original_format") == "markdown"]
+        text_docs = [d for d in documents if d.metadata.get("original_format") != "markdown"]
+
+        chunks: list[Document] = []
+        chunk_size_limit = chroma_conf["chunk_size"]
+
+        for doc in md_docs:
+            try:
+                md_chunks = self.md_splitter.split_text(doc.page_content)
+            except Exception as e:
+                logger.warning(f"[Splitter]markdown 章节切分失败：{e}，降级为字符切分")
+                chunks.extend(self.spliter.split_documents([doc]))
+                continue
+
+            # markdown 切分后超长的 chunk 用字符切分兜底
+            for mc in md_chunks:
+                merged_metadata = {**doc.metadata, **mc.metadata}
+                if len(mc.page_content) <= chunk_size_limit:
+                    chunks.append(Document(page_content=mc.page_content, metadata=merged_metadata))
+                else:
+                    sub_chunks = self.spliter.create_documents(
+                        [mc.page_content],
+                        metadatas=[merged_metadata],
+                    )
+                    chunks.extend(sub_chunks)
+
+        if text_docs:
+            chunks.extend(self.spliter.split_documents(text_docs))
+
+        return chunks
+
+    def _select_pdf_loader(self):
+        """根据配置返回 PDF 加载器：text 模式走 PyMuPDF，markdown 模式走 pymupdf4llm"""
+        if self.pdf_loader_mode == "markdown":
+            return pdf_markdown_loader
+        return pdf_loader
+
     def load_single_document(self, file_path: str, document_id: str) -> int:
         """
         加载单个文档到向量库
@@ -141,11 +199,13 @@ class VectorStoreService:
         :param document_id: 文档 ID（用于后续删除）
         :return: 分块数量
         """
+        pdf_load_fn = self._select_pdf_loader()
+
         def get_file_documents(read_path: str):
             if read_path.endswith("txt") or read_path.endswith("md"):
                 return txt_loader(read_path)
             if read_path.endswith("pdf"):
-                return pdf_loader(read_path)
+                return pdf_load_fn(read_path)
             if read_path.endswith("pptx"):
                 return pptx_loader(read_path)
             return []
@@ -157,7 +217,7 @@ class VectorStoreService:
                 logger.warning(f"[加载知识库]{file_path}内没有有效文本内容")
                 return 0
 
-            split_document: list[Document] = self.spliter.split_documents(documents)
+            split_document: list[Document] = self._smart_split(documents)
 
             if not split_document:
                 logger.warning(f"[加载知识库]{file_path}分片后没有有效文本内容")
@@ -223,12 +283,14 @@ class VectorStoreService:
             with open(md5_store_path, "a", encoding="utf-8") as f:
                 f.write(md5_for_check + "\n")
 
+        pdf_load_fn = self._select_pdf_loader()
+
         def get_file_documents(read_path: str):
             if read_path.endswith("txt") or read_path.endswith("md"):
                 return txt_loader(read_path)
 
             if read_path.endswith("pdf"):
-                return pdf_loader(read_path)
+                return pdf_load_fn(read_path)
 
             if read_path.endswith("pptx"):
                 return pptx_loader(read_path)
@@ -260,7 +322,7 @@ class VectorStoreService:
                     logger.warning(f"[加载知识库]{path}内没有有效文本内容，跳过")
                     continue
 
-                split_document: list[Document] = self.spliter.split_documents(documents)
+                split_document: list[Document] = self._smart_split(documents)
 
                 if not split_document:
                     logger.warning(f"[加载知识库]{path}分片后没有有效文本内容，跳过")

@@ -37,6 +37,7 @@ pyyaml>=6.0
 # 文件解析
 pypdf>=5.0.0
 pymupdf>=1.24.0             # 替换 PyPDFLoader，更好地处理复杂 PDF（表格、多栏、页眉页脚）
+pymupdf4llm>=0.0.17         # PDF → Markdown，保留章节标题结构，配合 MarkdownHeaderTextSplitter
 python-pptx>=1.0.0          # PPT 解析（销售培训资料、产品讲解 deck）
 
 # Hybrid Search 依赖（BM25 关键词检索 + 中文分词）

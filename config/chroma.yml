@@ -5,6 +5,13 @@ data_path : data/insurance
 md5_hex_store : md5.txt
 allow_knowledge_file_type : ["txt","pdf","md","pptx"]
 
+# PDF 加载模式：
+#   text     - PyMuPDFLoader 纯文本（默认，兼容现有 chroma_db）
+#   markdown - pymupdf4llm 输出 markdown，配合 MarkdownHeaderTextSplitter 按章节切分
+#              章节信息会写入 metadata 的 section_h1/section_h2/section_h3
+# 切换到 markdown 模式后，建议清空 chroma_db/ 重新构建索引以发挥效果
+pdf_loader_mode : text
+
 chunk_size : 600
 chunk_overlap : 80
 separators : ["\n\n","\n","。",".","?","？","!"," ",""]
