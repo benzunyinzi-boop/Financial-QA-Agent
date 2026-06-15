@@ -7,7 +7,7 @@ from model.factory import embed_model
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 from utils.path_tool import get_abs_path
-from utils.file_handler import pdf_loader, pdf_markdown_loader, txt_loader, pptx_loader, listdir_with_allowed_type, get_file_md5_hex
+from utils.file_handler import pdf_loader, pdf_markdown_loader, txt_loader, pptx_loader, image_loader, listdir_with_allowed_type, get_file_md5_hex
 
 from pathlib import Path
 from datetime import datetime
@@ -134,13 +134,16 @@ class VectorStoreService:
         source_type = Path(file_path).suffix.lstrip(".").lower()
         load_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         for i, doc in enumerate(docs):
+            # 保留 loader 已写入的 modality（如 image_description），仅当缺失时默认为 text
+            existing_modality = doc.metadata.get("modality")
+
             doc.metadata.update({
                 "document_id": document_id,
                 "chunk_index": i,
                 "source_file": Path(file_path).name,
                 "source_type": source_type,
                 "kb_name": kb_name,
-                "modality": "text",
+                "modality": existing_modality or "text",
                 "load_time": load_time,
             })
             # PyPDFLoader 写入的 page 是 0-indexed，统一转为 1-indexed
@@ -208,6 +211,8 @@ class VectorStoreService:
                 return pdf_load_fn(read_path)
             if read_path.endswith("pptx"):
                 return pptx_loader(read_path)
+            if read_path.endswith((".png", ".jpg", ".jpeg")):
+                return image_loader(read_path)
             return []
 
         try:
@@ -294,6 +299,9 @@ class VectorStoreService:
 
             if read_path.endswith("pptx"):
                 return pptx_loader(read_path)
+
+            if read_path.endswith((".png", ".jpg", ".jpeg")):
+                return image_loader(read_path)
 
             return []
 

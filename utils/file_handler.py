@@ -1,4 +1,5 @@
-import os,hashlib
+import os, hashlib, base64
+from functools import lru_cache
 from utils.logger_handler import logger
 
 from langchain_core.documents import Document
@@ -143,3 +144,96 @@ def pptx_loader(filepath: str) -> list[Document]:
 def txt_loader(filepath:str)->list[Document]:
 
     return TextLoader(filepath,encoding="utf-8").load()
+
+
+# ---------- 图片加载（VLM + 缓存）----------
+
+# 默认提取提示词：让 VLM 同时做 OCR + 结构描述 + 关键信息提取
+DEFAULT_IMAGE_PROMPT = (
+    "请详细提取这张图片中的所有信息：\n"
+    "1）逐字提取所有可见文字（OCR），保留原有格式和换行；\n"
+    "2）如果有表格，按行列结构输出，单元格用 | 分隔；\n"
+    "3）如果是保险相关单据/条款，重点提取保单号、保额、保费、被保险人、生效日期、条款编号等关键字段；\n"
+    "4）最后用一两句话总结图片的核心内容。\n"
+    "只输出提取结果，不要添加额外说明。"
+)
+
+
+@lru_cache(maxsize=512)
+def _vlm_describe_cached(image_md5: str, prompt: str, image_path: str) -> str:
+    """
+    VLM 描述缓存层（按图片 MD5 缓存）。
+    image_path 不参与 hash，仅用于实际调用；不同路径的相同图片复用结果。
+    """
+    try:
+        import dashscope
+    except ImportError:
+        logger.error("[图片加载]缺少依赖 dashscope")
+        return ""
+
+    try:
+        with open(image_path, "rb") as f:
+            image_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+        # 通过 file:// 协议传本地图片（DashScope SDK 支持）
+        ext = os.path.splitext(image_path)[1].lstrip(".").lower() or "png"
+        data_url = f"data:image/{ext};base64,{image_b64}"
+
+        resp = dashscope.MultiModalConversation.call(
+            model="qwen-vl-max",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"image": data_url},
+                    {"text": prompt},
+                ]
+            }],
+            timeout=30,
+        )
+
+        if resp.status_code != 200:
+            logger.error(f"[图片加载]VLM 调用失败 code={resp.code} msg={resp.message}")
+            return ""
+
+        # 兼容不同返回结构
+        content = resp.output.choices[0].message.content
+        if isinstance(content, list):
+            text = "\n".join(c.get("text", "") for c in content if isinstance(c, dict))
+        else:
+            text = str(content)
+
+        return text.strip()
+
+    except Exception as e:
+        logger.error(f"[图片加载]VLM 调用异常 {image_path}：{e}", exc_info=True)
+        return ""
+
+
+def image_loader(filepath: str, prompt: str = None) -> list[Document]:
+    """
+    图片加载器：用 Qwen-VL-Max 提取文字、表格、关键信息。
+    每张图 → 1 个 Document（modality=image_description）。
+    内置 MD5 缓存，避免重复调用 VLM。
+    """
+    if not os.path.exists(filepath):
+        logger.error(f"[图片加载]{filepath} 不存在")
+        return []
+
+    image_md5 = get_file_md5_hex(filepath)
+    if not image_md5:
+        return []
+
+    description = _vlm_describe_cached(image_md5, prompt or DEFAULT_IMAGE_PROMPT, filepath)
+    if not description:
+        logger.warning(f"[图片加载]{filepath} VLM 提取为空，跳过")
+        return []
+
+    return [Document(
+        page_content=description,
+        metadata={
+            "source": filepath,
+            "modality": "image_description",   # 由 _enrich_metadata 时不会覆盖此值
+            "original_image_path": filepath,
+            "image_md5": image_md5,
+        },
+    )]
