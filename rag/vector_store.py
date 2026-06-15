@@ -82,8 +82,31 @@ class VectorStoreService:
             logger.info("[向量库]集合为空，开始首次加载知识库")
             self.load_document()
 
-    def get_retriever(self):
-        return self.vector_store.as_retriever(search_kwargs={"k": chroma_conf["k"]})
+    def get_retriever(self, k: int = None):
+        """
+        :param k: 召回数量；不传则用 chroma.yml 里的默认 k
+                  开启 rerank 时建议传更大的值（如 20）作为候选池
+        """
+        if k is None:
+            k = chroma_conf["k"]
+        return self.vector_store.as_retriever(search_kwargs={"k": k})
+
+    def get_all_documents(self) -> list[Document]:
+        """
+        从 Chroma 集合里拉出所有文档（供 BM25 等关键词检索器构建内存索引）
+        注意：百万级文档以上会有内存压力，那时应改用 Elasticsearch 等外部 BM25
+        """
+        try:
+            result = self.vector_store._collection.get()
+            texts = result.get("documents", []) or []
+            metadatas = result.get("metadatas", []) or []
+            return [
+                Document(page_content=text, metadata=meta or {})
+                for text, meta in zip(texts, metadatas)
+            ]
+        except Exception as e:
+            logger.error(f"[向量库]拉取所有文档失败：{str(e)}", exc_info=True)
+            return []
 
     def load_single_document(self, file_path: str, document_id: str) -> int:
         """

@@ -1,2 +1,23 @@
 chat_model_name: qwen3-max
 embedding_model_name: text-embedding-v4
+
+# Hybrid Search 混合检索配置
+# 流程：向量召回（语义） + BM25 召回（关键词）→ 加权融合 → top_k 候选池
+# 适用场景：保险术语/产品名/条款编号（BM25 命中准）+ 自然语言（向量准）
+hybrid_search:
+  enabled: true
+  vector_weight: 0.6          # 向量检索权重
+  bm25_weight: 0.4            # BM25 检索权重
+  bm25_top_k: 20              # BM25 单路召回数量
+  fallback_on_error: true     # BM25 异常时降级为纯向量检索
+
+# Rerank 精排配置
+# 流程：召回 retrieve_top_k 条 → rerank 精排取 top_n 条
+# 失败时降级回原向量结果（fallback_on_error），不影响线上可用性
+rerank:
+  enabled: true
+  model: gte-rerank-v2
+  retrieve_top_k: 20          # 向量召回数量（rerank 候选池）
+  top_n: 3                    # rerank 后保留数量
+  fallback_on_error: true     # rerank 异常时降级到向量结果
+  timeout: 5                  # API 超时（秒）

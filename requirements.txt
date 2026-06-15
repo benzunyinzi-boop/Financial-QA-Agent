@@ -37,6 +37,10 @@ pyyaml>=6.0
 # 文件解析
 pypdf>=5.0.0
 
+# Hybrid Search 依赖（BM25 关键词检索 + 中文分词）
+rank_bm25>=0.2.2
+jieba>=0.42.1
+
 # 模型服务（阿里通义千问/ dashscope）
 dashscope>=1.20.0
 
