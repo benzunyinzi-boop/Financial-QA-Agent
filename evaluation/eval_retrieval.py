@@ -12,8 +12,11 @@
   - 分类别统计    各 category 的 Hit@K
 
 判定相关性的两种模式（默认 keyword）：
-  - keyword：从 ground_truth 提取关键词，chunk 命中 ≥ N 个关键词即为相关（快、免费）
+  - keyword：用 jieba 分词从 ground_truth 提取关键词，chunk 命中 ≥ N 个关键词即为相关（快、免费）
   - llm：调用 LLM 判断每条 chunk 是否相关（慢、有成本，但准确）
+
+注意：out_of_scope 类（如"今天天气怎么样"）本来就不应该召回知识库，
+故不计入整体 hit_rate / MRR 统计，仅在分类别报告里展示。
 """
 import os
 import sys
@@ -22,7 +25,7 @@ import json
 import argparse
 import re
 from datetime import datetime
-from collections import defaultdict
+from collections import defaultdict, Counter
 from statistics import mean, median
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -35,32 +38,37 @@ from rag.rag_service import RagSummarizeService
 from utils.logger_handler import logger
 
 
-# 中文 + 英文 + 数字的有意义 token（去掉单字）
-TOKEN_RE = re.compile(r"[一-龥]{2,}|[a-zA-Z]{2,}|\d{2,}")
+# 停用词（保险领域 + 通用虚词）
+STOPWORDS = {
+    "通常", "可以", "一般", "如果", "包括", "进行", "对于", "建议", "需要",
+    "不能", "保险", "公司", "保险公司", "保险合同", "合同", "本系统",
+    "什么", "以及", "或者", "但是", "因为", "所以", "对应", "当", "时",
+    "the", "and", "for", "with",
+}
+
+DIGIT_RE = re.compile(r"\d{2,}")
 
 
-def extract_keywords(text: str, top_n: int = 8) -> list[str]:
+def extract_keywords(text: str, top_n: int = 10) -> list[str]:
     """
-    从 ground_truth 里提取关键词（用于 keyword 模式判定相关性）
-    简单实现：取所有≥2字的中英数字 token，去重后取频次/长度兼顾的前 N 个
+    从 ground_truth 用 jieba 分词提取关键词。
+    优先保留：长度≥2 的实词 + 数字（多见于"15 天"、"30 日"等保险数字）
     """
-    tokens = TOKEN_RE.findall(text)
-    if not tokens:
-        return []
+    import jieba
 
-    # 按 (出现次数, 长度) 综合排序，避免被高频虚词主导
-    freq = defaultdict(int)
-    for t in tokens:
-        freq[t] += 1
+    # 1) jieba 分词
+    tokens = [t.strip() for t in jieba.lcut(text) if t.strip()]
+    candidates = [t for t in tokens if len(t) >= 2 and t not in STOPWORDS]
 
-    # 过滤明显的停用词
-    stopwords = {"通常", "可以", "一般", "如果", "包括", "进行", "对于", "建议", "需要",
-                 "不能", "保险", "公司", "保险公司", "保险合同", "合同", "the", "and"}
-    candidates = [(t, c) for t, c in freq.items() if t not in stopwords]
+    # 2) 单独抽取数字（jieba 切数字可能不稳定）
+    nums = [n for n in DIGIT_RE.findall(text) if n not in STOPWORDS]
 
-    # 综合分：频次 + 长度（长 token 信息密度高）
-    candidates.sort(key=lambda x: (x[1], len(x[0])), reverse=True)
-    return [t for t, _ in candidates[:top_n]]
+    all_tokens = candidates + nums
+
+    # 3) 综合排序：(频次, 长度) — 长 token 信息密度高
+    freq = Counter(all_tokens)
+    ranked = sorted(freq.items(), key=lambda x: (x[1], len(x[0])), reverse=True)
+    return [t for t, _ in ranked[:top_n]]
 
 
 def is_relevant_keyword(chunk: str, keywords: list[str], min_hits: int = 2) -> bool:
@@ -72,15 +80,12 @@ def is_relevant_keyword(chunk: str, keywords: list[str], min_hits: int = 2) -> b
 
 
 def evaluate_one(question: str, ground_truth: str, docs: list, min_hits: int = 2) -> dict:
-    """
-    对单条 query 计算 Hit / MRR
-    """
-    keywords = extract_keywords(ground_truth, top_n=8)
+    """对单条 query 计算 Hit / MRR"""
+    keywords = extract_keywords(ground_truth, top_n=10)
 
     relevances = [is_relevant_keyword(d.page_content, keywords, min_hits) for d in docs]
 
     hit = any(relevances)
-    # 首条相关的位置（1-indexed），未命中 = 0
     first_rank = next((i + 1 for i, r in enumerate(relevances) if r), 0)
     mrr = 1.0 / first_rank if first_rank > 0 else 0.0
 
@@ -112,7 +117,6 @@ def main():
     print(f"   样本数: {len(EVAL_DATASET)} | 关键词阈值: {args.min_hits}")
     print("=" * 70)
 
-    # 初始化 RAG 服务
     service = RagSummarizeService(kb_name=args.kb)
     count = service.vector_store.vector_store._collection.count()
     print(f"📚 向量库文档数: {count}")
@@ -121,7 +125,6 @@ def main():
         sys.exit(1)
     print()
 
-    # 跑评测
     results = []
     latencies = []
     cat_stats = defaultdict(lambda: {"hit": 0, "total": 0, "mrr_sum": 0.0})
@@ -173,17 +176,19 @@ def main():
             ],
         })
 
-    # ========== 汇总指标 ==========
-    total = len(results)
-    hits = sum(1 for r in results if r["hit"])
-    avg_mrr = mean(r["mrr"] for r in results)
+    # ========== 汇总指标（排除 out_of_scope）==========
+    # out_of_scope 本来就不该召回，参与 hit_rate 会误导
+    in_scope_results = [r for r in results if r["category"] != "out_of_scope"]
+    in_scope_total = len(in_scope_results)
+    in_scope_hits = sum(1 for r in in_scope_results if r["hit"])
+    in_scope_mrr = mean(r["mrr"] for r in in_scope_results) if in_scope_results else 0.0
 
     print()
     print("=" * 70)
-    print("📈 整体指标")
+    print(f"📈 整体指标（排除 {len(results) - in_scope_total} 条 out_of_scope 题）")
     print("=" * 70)
-    print(f"  Hit@K:    {hits}/{total} = {hits/total:.1%}")
-    print(f"  MRR:      {avg_mrr:.3f}")
+    print(f"  Hit@K:    {in_scope_hits}/{in_scope_total} = {in_scope_hits/in_scope_total:.1%}")
+    print(f"  MRR:      {in_scope_mrr:.3f}")
     print(f"  延迟 P50: {median(latencies):.2f}s")
     print(f"  延迟 P95: {sorted(latencies)[int(len(latencies)*0.95)]:.2f}s")
     print(f"  延迟 平均: {mean(latencies):.2f}s")
@@ -196,8 +201,9 @@ def main():
     for cat, stat in sorted(cat_stats.items()):
         rate = stat["hit"] / stat["total"] if stat["total"] else 0
         cat_mrr = stat["mrr_sum"] / stat["total"] if stat["total"] else 0
+        marker = "  (期望低)" if cat == "out_of_scope" else ""
         print(f"  {cat:<22} {stat['hit']:>4}/{stat['total']:<5} "
-              f"{rate:>7.1%} {cat_mrr:>8.3f}")
+              f"{rate:>7.1%} {cat_mrr:>8.3f}{marker}")
 
     # ========== 保存报告 ==========
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -207,11 +213,12 @@ def main():
         "timestamp": timestamp,
         "kb": args.kb,
         "doc_count": count,
-        "sample_count": total,
+        "sample_count_total": len(results),
+        "sample_count_in_scope": in_scope_total,
         "min_hits": args.min_hits,
         "metrics": {
-            "hit_at_k": hits / total,
-            "mrr": avg_mrr,
+            "hit_at_k": in_scope_hits / in_scope_total if in_scope_total else 0,
+            "mrr": in_scope_mrr,
             "latency_p50": median(latencies),
             "latency_p95": sorted(latencies)[int(len(latencies) * 0.95)],
             "latency_avg": mean(latencies),
